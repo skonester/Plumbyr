@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <RestoreSuccess Condition=" '$(RestoreSuccess)' == '' ">True</RestoreSuccess>
+    <RestoreTool Condition=" '$(RestoreTool)' == '' ">NuGet</RestoreTool>
+    <ProjectAssetsFile Condition=" '$(ProjectAssetsFile)' == '' ">$(MSBuildThisFileDirectory)project.assets.json</ProjectAssetsFile>
+    <NuGetPackageRoot Condition=" '$(NuGetPackageRoot)' == '' ">$(UserProfile)\.nuget\packages\</NuGetPackageRoot>
+    <NuGetPackageFolders Condition=" '$(NuGetPackageFolders)' == '' ">C:\Users\admin\.nuget\packages\</NuGetPackageFolders>
+    <NuGetProjectStyle Condition=" '$(NuGetProjectStyle)' == '' ">PackageReference</NuGetProjectStyle>
+    <NuGetToolVersion Condition=" '$(NuGetToolVersion)' == '' ">7.0.0</NuGetToolVersion>
+  </PropertyGroup>
+  <ItemGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <SourceRoot Include="C:\Users\admin\.nuget\packages\" />
+  </ItemGroup>
+  <ImportGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <Import Project="$(NuGetPackageRoot)skiasharp.nativeassets.webassembly\3.119.0\buildTransitive\netstandard1.0\SkiaSharp.NativeAssets.WebAssembly.props" Condition="Exists('$(NuGetPackageRoot)skiasharp.nativeassets.webassembly\3.119.0\buildTransitive\netstandard1.0\SkiaSharp.NativeAssets.WebAssembly.props')" />
+    <Import Project="$(NuGetPackageRoot)harfbuzzsharp.nativeassets.webassembly\8.3.1.1\buildTransitive\netstandard1.0\HarfBuzzSharp.NativeAssets.WebAssembly.props" Condition="Exists('$(NuGetPackageRoot)harfbuzzsharp.nativeassets.webassembly\8.3.1.1\buildTransitive\netstandard1.0\HarfBuzzSharp.NativeAssets.WebAssembly.props')" />
+    <Import Project="$(NuGetPackageRoot)avalonia\11.3.4\buildTransitive\Avalonia.props" Condition="Exists('$(NuGetPackageRoot)avalonia\11.3.4\buildTransitive\Avalonia.props')" />
+  </ImportGroup>
+  <PropertyGroup Condition=" '$(ExcludeRestorePackageImports)' != 'true' ">
+    <PkgAvalonia_BuildServices Condition=" '$(PkgAvalonia_BuildServices)' == '' ">C:\Users\admin\.nuget\packages\avalonia.buildservices\0.0.31</PkgAvalonia_BuildServices>
+    <PkgAvalonia Condition=" '$(PkgAvalonia)' == '' ">C:\Users\admin\.nuget\packages\avalonia\11.3.4</PkgAvalonia>
+    <PkgSukiUI Condition=" '$(PkgSukiUI)' == '' ">C:\Users\admin\.nuget\packages\sukiui\6.0.3</PkgSukiUI>
+    <PkgSerilog Condition=" '$(PkgSerilog)' == '' ">C:\Users\admin\.nuget\packages\serilog\4.3.1</PkgSerilog>
+    <PkgSerilog_Sinks_Observable Condition=" '$(PkgSerilog_Sinks_Observable)' == '' ">C:\Users\admin\.nuget\packages\serilog.sinks.observable\3.0.0</PkgSerilog_Sinks_Observable>
+    <PkgSerilog_Sinks_InMemory Condition=" '$(PkgSerilog_Sinks_InMemory)' == '' ">C:\Users\admin\.nuget\packages\serilog.sinks.inmemory\2.0.0</PkgSerilog_Sinks_InMemory>
+    <PkgSerilog_Sinks_File Condition=" '$(PkgSerilog_Sinks_File)' == '' ">C:\Users\admin\.nuget\packages\serilog.sinks.file\7.0.0</PkgSerilog_Sinks_File>
+    <PkgSerilog_Sinks_Debug Condition=" '$(PkgSerilog_Sinks_Debug)' == '' ">C:\Users\admin\.nuget\packages\serilog.sinks.debug\3.0.0</PkgSerilog_Sinks_Debug>
+    <PkgFSharp_Core Condition=" '$(PkgFSharp_Core)' == '' ">C:\Users\admin\.nuget\packages\fsharp.core\10.1.201</PkgFSharp_Core>
+    <PkgByteSize Condition=" '$(PkgByteSize)' == '' ">C:\Users\admin\.nuget\packages\bytesize\2.1.2</PkgByteSize>
+    <PkgAvalonia_Themes_Fluent Condition=" '$(PkgAvalonia_Themes_Fluent)' == '' ">C:\Users\admin\.nuget\packages\avalonia.themes.fluent\11.3.4</PkgAvalonia_Themes_Fluent>
+    <PkgAvalonia_Svg_Skia Condition=" '$(PkgAvalonia_Svg_Skia)' == '' ">C:\Users\admin\.nuget\packages\avalonia.svg.skia\11.3.0</PkgAvalonia_Svg_Skia>
+    <PkgAvalonia_Desktop Condition=" '$(PkgAvalonia_Desktop)' == '' ">C:\Users\admin\.nuget\packages\avalonia.desktop\11.3.4</PkgAvalonia_Desktop>
+    <PkgAvalonia_AvaloniaEdit Condition=" '$(PkgAvalonia_AvaloniaEdit)' == '' ">C:\Users\admin\.nuget\packages\avalonia.avaloniaedit\11.1.0</PkgAvalonia_AvaloniaEdit>
+  </PropertyGroup>
+</Project>
