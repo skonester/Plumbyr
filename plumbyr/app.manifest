@@ -6,7 +6,7 @@
     name="WindowsCleaner"
     type="win32"
   />
-  <description>Windows Cleaner Pro - F# Edition</description>
+  <description>Plumbyr Prototype - F# Edition</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>

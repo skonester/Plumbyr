@@ -1,6 +1,7 @@
 namespace WindowsCleaner
 
 open System
+open FSharp.Json
 
 type LogLevel =
     | INFO
@@ -38,57 +39,85 @@ type CleanTarget = {
     SourceFile: string
 }
 
+type ScanTargetResult = {
+    Target: CleanTarget
+    Exists: bool
+    EstimatedBytes: uint64
+    FileCount: int
+    FolderCount: int
+    Error: string option
+}
+
 // JSON Structure Types
 type JsonTarget = {
-    path: string
-    subcategory: string
-    description: string
-    needsAdmin: Nullable<bool>
+    path: string option
+    subcategory: string option
+    description: string option
+    needsAdmin: bool option
 }
 
 type JsonApp = {
-    id: string
-    name: string
-    paths: string[]
-    description: string
-    childSubdir: string
+    id: string option
+    name: string option
+    paths: string[] option
+    description: string option
+    childSubdir: string option
 }
 
 type ChromiumCacheDirs = {
-    cache: string
-    codeCache: string
-    gpuCache: string
-    serviceWorker: string
+    cache: string option
+    codeCache: string option
+    gpuCache: string option
+    serviceWorker: string option
 }
 
 type ChromiumBrowser = {
-    key: string
-    BaseDir: string
+    key: string option
+    [<JsonField("base")>]
+    basePath: string option
 }
 
 type FirefoxConfig = {
-    BaseDir: string
-    cache: string
+    [<JsonField("base")>]
+    basePath: string option
+    cache: string option
 }
 
 type FirefoxFork = {
-    key: string
-    BaseDir: string
-    cache: string
+    key: string option
+    [<JsonField("base")>]
+    basePath: string option
+    cache: string option
+}
+
+type SharedDbFileSets = {
+    chromium: string[] option
+    firefox: string[] option
+}
+
+type DatabaseTarget = {
+    label: string option
+    basePath: string option
+    dbFiles: obj option
+    multiProfile: bool option
+    profilePattern: string[] option
+    description: string option
 }
 
 type RulesFile = {
-    [<System.Text.Json.Serialization.JsonPropertyName("type")>]
-    RuleType: string
-    cleanTargets: JsonTarget[]
-    singleFileTargets: JsonTarget[]
-    apps: JsonApp[]
-    chromiumCacheDirs: ChromiumCacheDirs
-    chromium: ChromiumBrowser[]
-    firefox: FirefoxConfig
-    firefoxForks: FirefoxFork[]
-    libraries: string[]
-    redistPatterns: string[]
+    [<JsonField("type")>]
+    ruleType: string option
+    cleanTargets: JsonTarget[] option
+    singleFileTargets: JsonTarget[] option
+    apps: JsonApp[] option
+    chromiumCacheDirs: ChromiumCacheDirs option
+    chromium: ChromiumBrowser[] option
+    firefox: FirefoxConfig option
+    firefoxForks: FirefoxFork[] option
+    libraries: string[] option
+    redistPatterns: string[] option
+    sharedDbFileSets: SharedDbFileSets option
+    targets: DatabaseTarget[] option
 }
 
 type AggregatedStats = {
