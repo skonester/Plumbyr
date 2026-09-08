@@ -6,10 +6,12 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <RootNamespace>WindowsCleaner</RootNamespace>
+    <NodeRuntimeDir>$(MSBuildProjectDirectory)\..\.build\node\win-x64</NodeRuntimeDir>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="Types.fs" />
+    <Compile Include="AppFiles.fs" />
     <Compile Include="Win32.fs" />
     <Compile Include="FileOperations.fs" />
     <Compile Include="ActivityLog.fs" />
@@ -18,18 +20,24 @@
     <Compile Include="CleanTargets.fs" />
     <Compile Include="ScanEngine.fs" />
     <Compile Include="SystemInfo.fs" />
+    <Compile Include="KuduBridge.fs" />
+    <Compile Include="BrowserAnalysisView.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Assets\icon.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\win32rules\*.json">
-      <Link>win32rules\%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <EmbeddedResource Include="Assets\icon.png" LogicalName="Plumbyr.Payload/Assets/icon.png" />
+    <EmbeddedResource Include="..\win32rules\*.json" LogicalName="Plumbyr.Payload/win32rules/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Kudu\worker.mjs" LogicalName="Plumbyr.Payload/Kudu/worker.mjs" />
+    <EmbeddedResource Include="Kudu\vendor\*.ts;Kudu\vendor\browsers.json;Kudu\vendor\LICENSE" LogicalName="Plumbyr.Payload/Kudu/vendor/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="$(NodeRuntimeDir)\node.exe" LogicalName="Plumbyr.Payload/Kudu/node.exe" />
+    <EmbeddedResource Include="$(NodeRuntimeDir)\LICENSE" LogicalName="Plumbyr.Payload/Kudu/NODE-LICENSE" />
   </ItemGroup>
+
+  <Target Name="PrepareBundledNode" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(RuntimeIdentifier)' != '' And '$(RuntimeIdentifier)' != 'win-x64'" Text="Bundled Node currently supports win-x64. Use the SingleFile publish profile." />
+    <Exec Command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\scripts\Prepare-Node.ps1&quot;" />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.2" />
@@ -37,7 +45,6 @@
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.2" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.2" />
-    <PackageReference Include="Avalonia.Themes.Simple" Version="12.0.2" />
     <PackageReference Include="ByteSize" Version="2.1.2" />
     <PackageReference Include="FSharp.Json" Version="0.4.1" />
     <PackageReference Include="Serilog" Version="4.3.1" />

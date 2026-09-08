@@ -27,7 +27,7 @@ type TerminalSink(onLog: string -> unit) =
 
 module AppLogging =
     let private logPath () =
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plumbyr_log.txt")
+        Path.Combine(AppFiles.dataDirectory(), "plumbyr_log.txt")
 
     let configure (uiLog: (string -> unit) option) =
         let config =
@@ -95,7 +95,8 @@ type MainWindow() as this =
 
     do
         this.Title <- "Plumbyr"
-        let iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "icon.png")
+        this.RequestedThemeVariant <- Avalonia.Styling.ThemeVariant.Dark
+        let iconPath = AppFiles.get "Assets/icon.png"
         try
             if File.Exists(iconPath) then
                 this.Icon <- WindowIcon(iconPath)
@@ -118,7 +119,7 @@ type MainWindow() as this =
         this.Content <- mainContent
 
         // Initialize History
-        let historyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plumbyr_history.db")
+        let historyPath = Path.Combine(AppFiles.dataDirectory(), "plumbyr_history.db")
         CleaningHistory.GetInstance().Initialize(historyPath)
 
         // Sidebar
@@ -364,6 +365,10 @@ type MainWindow() as this =
             transition.Content <- content
             this.PopulateTargets()
 
+        let browserAnalysis = new BrowserAnalysisView(writeToLog, fun () ->
+            showView "clean" (Some BrowserCache) "BROWSER CLEANUP" cleanerView)
+        this.Closed.Add(fun _ -> (browserAnalysis :> IDisposable).Dispose())
+
         let executeShellCommand (cmd: string) =
             Thread(fun () ->
                 try
@@ -467,7 +472,7 @@ type MainWindow() as this =
         dashBtn.Click.Add(fun _ -> writeToLog "Switching to Dashboard..."; showView "dash" None "DASHBOARD" dashboardView)
         termBtn.Click.Add(fun _ -> writeToLog "Switching to Command Center..."; showView "term" None "COMMAND CENTER" terminalView)
         sysBtn.Click.Add(fun _ -> writeToLog "Switching to System Cleanup..."; showView "clean" (Some SystemTemporary) "SYSTEM CLEANUP" cleanerView)
-        browserBtn.Click.Add(fun _ -> writeToLog "Switching to Browser Cleanup..."; showView "clean" (Some BrowserCache) "BROWSER CLEANUP" cleanerView)
+        browserBtn.Click.Add(fun _ -> writeToLog "Switching to Browser Analysis..."; showView "browsers" None "BROWSER ANALYSIS" browserAnalysis)
         appsBtn.Click.Add(fun _ -> writeToLog "Switching to App Cleanup..."; showView "clean" (Some ApplicationCache) "APP CLEANUP" cleanerView)
         gameBtn.Click.Add(fun _ -> writeToLog "Switching to Gaming & GPU..."; showView "clean" (Some GamingCache) "GAMING & GPU" cleanerView)
         diagBtn.Click.Add(fun _ -> runSystemDiagnostics())
@@ -619,6 +624,9 @@ type App() =
     inherit Application()
     override this.Initialize() = 
         this.Styles.Add(FluentTheme())
+        let gridStyle = Avalonia.Markup.Xaml.Styling.StyleInclude(baseUri = null)
+        gridStyle.Source <- Uri("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml")
+        this.Styles.Add(gridStyle)
         let editStyle = Avalonia.Markup.Xaml.Styling.StyleInclude(baseUri = null)
         editStyle.Source <- Uri("avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml")
         this.Styles.Add(editStyle)
@@ -639,13 +647,20 @@ module Main =
                 | other -> Log.Fatal("Unhandled AppDomain exception: {ExceptionObject}", other)
                 Log.CloseAndFlush())
 
-            let exitCode = AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime(argv)
+            AppFiles.initialize()
+            let exitCode =
+                if argv.Length = 2 && argv[0] = "--analyze-browsers" then
+                    let report = KuduBridge.analyze CancellationToken.None |> fun work -> work.GetAwaiter().GetResult()
+                    File.WriteAllText(Path.GetFullPath(argv[1]), System.Text.Json.JsonSerializer.Serialize(report))
+                    0
+                else
+                    AppBuilder.Configure<App>().UsePlatformDetect().StartWithClassicDesktopLifetime(argv)
             Log.Information("Plumbyr exited with code {ExitCode}", exitCode)
             Log.CloseAndFlush()
             exitCode
         with ex ->
             Log.Fatal(ex, "Plumbyr failed during startup")
-            try File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash_log.txt"), ex.ToString()) with _ -> ()
+            try File.WriteAllText(Path.Combine(AppFiles.dataDirectory(), "crash_log.txt"), ex.ToString()) with _ -> ()
             Log.CloseAndFlush()
             printfn "CRASH: %s" ex.Message
             1

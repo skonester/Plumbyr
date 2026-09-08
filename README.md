@@ -2,73 +2,88 @@
 
 **Plumbing Linked Universal Maintenance & Binary Yield Reclaimer**
 
-Plumbyr is a Windows cleaner and diagnostics app written in F# with Avalonia. It is aimed at a CCleaner-style workflow: load maintenance rules, scan for reclaimable files, show clear size/count results, and let the user review what will be cleaned before running an action.
+Plumbyr is a Windows cleaner and diagnostics app written in F# with Avalonia. It loads maintenance rules, analyzes files, shows size/count results, and lets you review selected cleanup targets.
 
-## Current Capabilities
+## Download / Run
 
-- **Rule-based cleaner**: Loads JSON cleaning rules from the linked `win32rules` folder so targets can be updated without rewriting scanner logic.
-- **FSharp.Json rule loading**: Uses typed F# models for rule parsing instead of ad hoc string handling.
-- **Cleaner-style scan results**: Groups duplicate rule entries, detects file and folder sizes, and reports reclaimable bytes before cleanup.
-- **Safe cleanup flow**: Allows selected targets to be analyzed or cleaned while logging skipped, missing, and protected paths.
-- **System diagnostics**: Reports operating system, CPU, RAM, storage, display adapter, driver, and dedicated VRAM details using Windows APIs and DXGI instead of relying on `dxdiag` output.
-- **Activity terminal**: Provides a command-center view for cleaner events, diagnostics reports, and optional Windows command output. The default prompt is `help`.
-- **App branding**: Uses the Plumbyr app icon in the executable and displays the app image inside the window.
-- **Structured logging**: Uses Serilog for application logs and debugging output.
+The distributable is **dist/win-x64/Plumbyr.exe**: one self-contained Windows x64 executable. Copy that file to the destination computer and run it. No separate .NET or Node installation is needed. The existing application manifest requests administrator rights.
 
-## Tech Stack
+The EXE includes .NET, native UI libraries, Node, the Kudu browser worker, cleaning rules, images, and Kudu/Node license notices. On first launch, bundled files are materialized in a per-build cache under **%LOCALAPPDATA%/Plumbyr/runtime**. .NET also extracts native libraries to its standard temporary bundle cache. No sibling files need to be distributed with the EXE.
 
-- **Language**: F#
-- **Runtime**: .NET 10
-- **UI**: Avalonia 12 with Fluent styling
-- **Rules**: JSON files linked from `win32rules`
-- **JSON parsing**: FSharp.Json
-- **Diagnostics**: System.Management and Vortice.DXGI
-- **Logging**: Serilog
+Logs and cleaning history live under **%LOCALAPPDATA%/Plumbyr**, so the executable can run from a directory that is not writable.
 
-## Project Layout
+## Build
 
-```text
-Cleaner/
-+- plumbyr/
-|  +- Program.fs          # Avalonia UI and app flow
-|  +- RuleLoader.fs       # JSON rule loading
-|  +- ScanEngine.fs       # Size detection, analysis, and cleanup
-|  +- SystemInfo.fs       # Windows and hardware diagnostics
-|  +- Types.fs            # Shared domain models
-|  +- Assets/             # App icon and image assets
-|  +- Plumbyr.fsproj
-+- win32rules/            # JSON cleaner rule definitions
-+- README.md
-```
-
-## Requirements
-
-- Windows 10 or Windows 11
-- .NET 10 SDK
-
-## Build And Run
+Build requirements: Windows x64, .NET 10 SDK, and Windows PowerShell. The first build downloads a pinned Node archive from nodejs.org and restores NuGet packages. Subsequent builds reuse the local caches; a separate Node/npm installation is unnecessary.
 
 From the repository root:
 
-```powershell
-dotnet build plumbyr\Plumbyr.fsproj
-dotnet run --project plumbyr\Plumbyr.fsproj
-```
+~~~powershell
+./scripts/Publish.ps1
+~~~
 
-Or from the app folder:
+Equivalent publish command:
 
-```powershell
-cd plumbyr
-dotnet build
-dotnet run
-```
+~~~powershell
+dotnet publish plumbyr/Plumbyr.fsproj -c Release -p:PublishProfile=SingleFile
+~~~
 
-## Updating Cleaner Rules
+Output: **dist/win-x64/Plumbyr.exe**. The publish script checks that this is the only output file. Trimming is disabled to preserve F# JSON serialization, reflection, and Avalonia bindings.
 
-The app links the JSON files from `win32rules` into the build output. To update cleaner coverage, edit or replace the rule files in that folder, then rebuild the app.
+For development:
 
-Rule loading is handled by `RuleLoader.fs`, which maps JSON entries into typed F# records before the scanner expands paths, checks existence, measures size, and groups duplicate entries for display.
+~~~powershell
+dotnet run --project plumbyr/Plumbyr.fsproj
+~~~
 
-## Notes
+## Features
 
-Plumbyr is still under active development. Treat cleanup actions with the same care as any system maintenance tool: scan first, review the selected targets, then clean. Not responsible for data loss.
+- **Rule-based cleanup:** JSON definitions, grouped analysis results, selected cleanup actions, and activity logging.
+- **Browser cache analysis:** Kudu's original TypeScript discovers Chromium browser caches; a bundled Node worker measures paths, sizes, and file counts. Includes cancellation, timeout handling, and incomplete-scan reporting.
+- **System diagnostics:** Windows/hardware information using System.Management and DXGI.
+- **Command Center:** activity terminal, diagnostics, and optional Windows command output.
+- **Cleaning history:** session statistics and terminal-log export.
+
+Open **Browsers > Analyze browser caches** for read-only browser analysis. Sizes show current logical file bytes, not guaranteed reclaimable space. Firefox is not included in this integration. **Open cleanup rules** opens the existing browser cleanup workflow.
+
+Browser analysis can also write a JSON report without opening the UI:
+
+~~~powershell
+./dist/win-x64/Plumbyr.exe --analyze-browsers report.json
+~~~
+
+## Verification
+
+After publishing:
+
+~~~powershell
+dotnet fsi tests/KuduBridgeSmoke.fsx
+~~~
+
+This checks fixture measurements, missing dependencies, cancellation, timeouts, output limits, and worker errors using the embedded runtime.
+
+From an administrator PowerShell (the app manifest requires elevation):
+
+~~~powershell
+./tests/SingleFileSmoke.ps1
+~~~
+
+This copies only the EXE to a fresh fixture directory, clears PATH, disables external .NET lookup, verifies browser analysis, and removes its own fixture files.
+
+## Repository Layout
+
+~~~text
+plumbyr/             F# application, assets, and publish profile
+plumbyr/Kudu/        Worker adapter and the small retained Kudu source subset
+win32rules/          Embedded JSON cleaning rules
+scripts/            Publish script and checksum-pinned Node preparation
+tests/              Bridge and standalone-executable smoke tests
+dist/               Generated executable (ignored)
+.build/             Download cache and build checks (ignored)
+~~~
+
+Edit win32rules and rebuild to update embedded cleanup definitions. The app does not load rules from the current working directory.
+
+Only the Kudu modules used by browser discovery are retained. Their original MIT license is in plumbyr/Kudu/vendor/LICENSE. Node version and official archive/executable checksums are pinned in scripts/node-runtime.json; its license and dependency notices are embedded from the verified archive. See [single-file deployment](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview) for the .NET bundling mechanism.
+
+Plumbyr is under active development. Review selected cleanup targets before deleting files.
