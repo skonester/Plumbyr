@@ -8,7 +8,7 @@ Plumbyr is a Windows cleaner and diagnostics app written in F# with Avalonia. It
 
 The distributable is **dist/win-x64/Plumbyr.exe**: one self-contained Windows x64 executable. Copy that file to the destination computer and run it. No separate .NET or Node installation is needed. The existing application manifest requests administrator rights.
 
-The EXE includes .NET, native UI libraries, Node, the Kudu browser worker, cleaning rules, images, and Kudu/Node license notices. On first launch, bundled files are materialized in a per-build cache under **%LOCALAPPDATA%/Plumbyr/runtime**. .NET also extracts native libraries to its standard temporary bundle cache. No sibling files need to be distributed with the EXE.
+The EXE bundles .NET 10, Avalonia 12.0.2 UI libraries, System.Management, DXGI, Serilog, ByteSize, FSharp.Json, a pinned Node runtime (`node.exe`), the Kudu browser worker (`Kudu/worker.mjs`), embedded cleaning rules (`win32rules/*.json`), assets (`Assets/icon.png`), and license notices (`Kudu/vendor/LICENSE`, `NODE-LICENSE`). The `.fsproj` embeds these as `Plumbyr.Payload/*` resources; `Prepare-Node.ps1` downloads the pinned archive to `.build/node/win-x64` before build. On first launch, bundled files are materialized in a per-build cache under **%LOCALAPPDATA%/Plumbyr/runtime**. .NET also extracts native libraries to its standard temporary bundle cache. No sibling files need to be distributed with the EXE.
 
 Logs and cleaning history live under **%LOCALAPPDATA%/Plumbyr**, so the executable can run from a directory that is not writable.
 
@@ -25,10 +25,10 @@ From the repository root:
 Equivalent publish command:
 
 ~~~powershell
-dotnet publish plumbyr/Plumbyr.fsproj -c Release -p:PublishProfile=SingleFile
+dotnet publish plumbyr/Plumbyr.fsproj -c Release -p:PublishProfile=SingleFile -r win-x64
 ~~~
 
-Output: **dist/win-x64/Plumbyr.exe**. The publish script checks that this is the only output file. Trimming is disabled to preserve F# JSON serialization, reflection, and Avalonia bindings.
+The `SingleFile.pubxml` profile sets `SelfContained=true`, `PublishSingleFile=true`, `EnableCompressionInSingleFile=true`, `PublishTrimmed=false`, and `RuntimeIdentifier=win-x64`. Output is written to `dist/win-x64/`. The publish script verifies that `dist/win-x64/` contains exactly one file: `Plumbyr.exe`. Trimming is disabled (`PublishTrimmed=false`) to preserve F# JSON serialization, reflection, and Avalonia bindings.
 
 For development:
 
