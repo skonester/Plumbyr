@@ -73,6 +73,7 @@ type MainWindow() as this =
     let BROWSER_SVG = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
     let APPS_SVG = "M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"
     let GAME_SVG = "M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"
+    let DRIVER_SVG = "M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"
 
     let mutable currentView = "dash"
     let mutable currentCategory: CleanCategory option = None
@@ -152,7 +153,7 @@ type MainWindow() as this =
         let browserBtn = createNavBtn "Browsers" BROWSER_SVG
         let appsBtn = createNavBtn "Applications" APPS_SVG
         let gameBtn = createNavBtn "Gaming & GPU" GAME_SVG
-        let diagBtn = createNavBtn "System Diagnostics" SYS_SVG
+        let diagBtn = createNavBtn "Drivers" DRIVER_SVG
         let histBtn = createNavBtn "Export History" HIST_SVG
 
         navStack.Children.AddRange [dashBtn; termBtn; sysBtn; browserBtn; appsBtn; gameBtn; diagBtn; histBtn]
@@ -235,21 +236,27 @@ type MainWindow() as this =
         // Terminal View
         let logGrid = Grid(RowDefinitions = RowDefinitions("Auto,Auto,*,Auto"), Margin = Thickness(30.0))
         let logHeader = Border(Background = SolidColorBrush.Parse("#121212"), CornerRadius = CornerRadius(8.0), Padding = Thickness(20.0), Margin = Thickness(0.0, 0.0, 0.0, 12.0))
-        let logHeaderStack = StackPanel(Spacing = 4.0)
-        logHeaderStack.Children.Add(TextBlock(Text = "Activity & Diagnostics", FontWeight = FontWeight.Bold, Foreground = Brushes.LimeGreen, FontSize = 18.0))
-        logHeaderStack.Children.Add(TextBlock(Text = "Cleaner events, diagnostics reports, and optional Windows command output appear here.", Foreground = Brushes.Gray, FontSize = 13.0, TextWrapping = TextWrapping.Wrap))
+        let logHeaderStack = StackPanel(Spacing = 6.0)
+        let titleRow = StackPanel(Orientation = Orientation.Horizontal, Spacing = 12.0)
+        titleRow.Children.Add(TextBlock(Text = "Command Center & Maintenance Console", FontWeight = FontWeight.Bold, Foreground = Brushes.White, FontSize = 18.0))
+        let adminBadge = Border(Background = SolidColorBrush.Parse("#052e16"), BorderBrush = SolidColorBrush.Parse("#16a34a"), BorderThickness = Thickness(1.0), CornerRadius = CornerRadius(4.0), Padding = Thickness(8.0, 2.0), VerticalAlignment = VerticalAlignment.Center)
+        adminBadge.Child <- TextBlock(Text = "● ELEVATED ADMIN", FontSize = 11.0, FontWeight = FontWeight.Bold, Foreground = Brushes.LimeGreen)
+        titleRow.Children.Add(adminBadge)
+        logHeaderStack.Children.Add(titleRow)
+        logHeaderStack.Children.Add(TextBlock(Text = "Execute elevated Windows repairs, native PowerShell cmdlets, network resets, and PC maintenance routines.", Foreground = Brushes.Gray, FontSize = 13.0, TextWrapping = TextWrapping.Wrap))
         logHeader.Child <- logHeaderStack
         Grid.SetRow(logHeader, 0)
 
         let terminalActions = StackPanel(Orientation = Orientation.Horizontal, Spacing = 10.0, Margin = Thickness(0.0, 0.0, 0.0, 12.0))
         let createTerminalAction text =
             Button(Content = text, Height = 38.0, MinWidth = 118.0, Padding = Thickness(14.0, 0.0), CornerRadius = CornerRadius(8.0), Background = SolidColorBrush.Parse("#1f2937"), Foreground = Brushes.White)
-        let helpQuickBtn = createTerminalAction "Help"
-        let diagQuickBtn = createTerminalAction "Diagnostics"
-        let networkQuickBtn = createTerminalAction "Network info"
-        let windowsQuickBtn = createTerminalAction "Windows version"
-        let clearLogBtn = createTerminalAction "Clear"
-        terminalActions.Children.AddRange [helpQuickBtn; diagQuickBtn; networkQuickBtn; windowsQuickBtn; clearLogBtn]
+        let helpQuickBtn = createTerminalAction "📖 Help Guide"
+        let flushDnsQuickBtn = createTerminalAction "⚡ Flush DNS"
+        let dismHealthQuickBtn = createTerminalAction "🛡️ DISM Health"
+        let topProcQuickBtn = createTerminalAction "🔍 Top Processes"
+        let batteryQuickBtn = createTerminalAction "🔋 Battery Report"
+        let clearLogBtn = createTerminalAction "🧹 Clear"
+        terminalActions.Children.AddRange [helpQuickBtn; flushDnsQuickBtn; dismHealthQuickBtn; topProcQuickBtn; batteryQuickBtn; clearLogBtn]
         Grid.SetRow(terminalActions, 1)
         
         let logEditor = TextEditor(Background = SolidColorBrush.Parse("#080808"), Foreground = Brushes.LimeGreen, FontSize = 13.0, FontFamily = FontFamily("Consolas"), IsReadOnly = true, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Visible, WordWrap = true)
@@ -258,12 +265,28 @@ type MainWindow() as this =
         
         Grid.SetRow(logEditor, 2)
         
-        let inputRow = Grid(ColumnDefinitions = ColumnDefinitions("*,110"), Margin = Thickness(0.0, 15.0, 0.0, 0.0))
-        let inputField = TextBox(PlaceholderText = "help", Height = 45.0, VerticalContentAlignment = VerticalAlignment.Center, Background = SolidColorBrush.Parse("#121212"), Foreground = Brushes.White, BorderThickness = Thickness(1.0), BorderBrush = SolidColorBrush.Parse("#333"))
-        Grid.SetColumn(inputField, 0)
+        let inputRow = Grid(ColumnDefinitions = ColumnDefinitions("Auto,*,110"), Margin = Thickness(0.0, 15.0, 0.0, 0.0))
+        let promptBadge = Border(
+            Background = SolidColorBrush.Parse("#1a1a1a"),
+            BorderBrush = SolidColorBrush.Parse("#333"),
+            BorderThickness = Thickness(1.0, 1.0, 0.0, 1.0),
+            CornerRadius = CornerRadius(8.0, 0.0, 0.0, 8.0),
+            Padding = Thickness(12.0, 0.0),
+            Height = 45.0)
+        let promptTxt = TextBlock(
+            Text = "ADMIN >",
+            FontFamily = FontFamily("Consolas"),
+            FontWeight = FontWeight.Bold,
+            Foreground = Brushes.LimeGreen,
+            VerticalAlignment = VerticalAlignment.Center)
+        promptBadge.Child <- promptTxt
+        Grid.SetColumn(promptBadge, 0)
+
+        let inputField = TextBox(PlaceholderText = "Type a command (e.g. 'help', 'flushdns', 'ps Get-Process', 'sfc')...", Height = 45.0, VerticalContentAlignment = VerticalAlignment.Center, Background = SolidColorBrush.Parse("#121212"), Foreground = Brushes.White, BorderThickness = Thickness(0.0, 1.0, 1.0, 1.0), CornerRadius = CornerRadius(0.0, 8.0, 8.0, 0.0), BorderBrush = SolidColorBrush.Parse("#333"))
+        Grid.SetColumn(inputField, 1)
         let runCommandBtn = Button(Content = "Run", Height = 45.0, Margin = Thickness(10.0, 0.0, 0.0, 0.0), FontWeight = FontWeight.Bold, CornerRadius = CornerRadius(8.0), Background = SolidColorBrush.Parse("#2563eb"), Foreground = Brushes.White)
-        Grid.SetColumn(runCommandBtn, 1)
-        inputRow.Children.AddRange [inputField; runCommandBtn]
+        Grid.SetColumn(runCommandBtn, 2)
+        inputRow.Children.AddRange [promptBadge; inputField; runCommandBtn]
         Grid.SetRow(inputRow, 3)
         
         logGrid.Children.AddRange [logHeader; terminalActions; logEditor; inputRow]
@@ -342,9 +365,9 @@ type MainWindow() as this =
         AppLogging.configure (Some writeToLog)
             
         Log.Information("Plumbyr Started")
-        writeToLog "--- TERMINAL INITIALIZED AND READY ---"
-        writeToLog "Plumbyr prototype terminal ready."
-        writeToLog "Type 'help' or use the action buttons above."
+        writeToLog "--- COMMAND CENTER INITIALIZED (ELEVATED ADMIN) ---"
+        writeToLog "Plumbyr Power-User Terminal ready. CMD & PowerShell enabled."
+        writeToLog "Type 'help' for available commands or use the quick actions above."
         
         // Real-time Stats during Purge
         scanEngine.OnFileProcessed.Add(fun _ ->
@@ -369,17 +392,143 @@ type MainWindow() as this =
             showView "clean" (Some BrowserCache) "BROWSER CLEANUP" cleanerView)
         this.Closed.Add(fun _ -> (browserAnalysis :> IDisposable).Dispose())
 
-        let executeShellCommand (cmd: string) =
+        let driversView = new DriversView(writeToLog, this.StorageProvider)
+
+        let runExportHistory () =
+            async {
+                let options = FilePickerSaveOptions(
+                    Title = "Export Terminal Logs", 
+                    SuggestedFileName = "plumbyr_logs.txt", 
+                    DefaultExtension = "txt",
+                    FileTypeChoices = [| FilePickerFileType("Text Files", Patterns = [| "*.txt" |]) |])
+                
+                let! file = this.StorageProvider.SaveFilePickerAsync(options) |> Async.AwaitTask
+                
+                if box file <> null then
+                    try
+                        let logs = logEditor.Text
+                        use! stream = file.OpenWriteAsync() |> Async.AwaitTask
+                        use sw = new StreamWriter(stream)
+                        sw.WriteLine("PLUMBYR TERMINAL EXPORT")
+                        sw.WriteLine(sprintf "Generated on: %O" DateTime.Now)
+                        sw.WriteLine("==========================================")
+                        sw.Write(logs)
+                        
+                        Dispatcher.UIThread.Post(fun () -> 
+                            showView "term" None "COMMAND CENTER" terminalView
+                            writeToLog (sprintf "Terminal logs exported to: %s" file.Name)
+                            writeToLog "--- EXPORT COMPLETE ---")
+                    with ex -> 
+                        Dispatcher.UIThread.Post(fun () -> writeToLog (sprintf "ERROR EXPORTING LOGS: %s" ex.Message))
+            } |> Async.StartImmediate
+
+        let printHelpGuide (topic: string) =
+            match topic.Trim().ToLowerInvariant() with
+            | "repair" | "dism" | "sfc" ->
+                writeToLog "======================================================================"
+                writeToLog "                   SYSTEM REPAIR & SERVICING COMMANDS                 "
+                writeToLog "======================================================================"
+                writeToLog "  sfc /scannow       - Scan & repair corrupted Windows system files"
+                writeToLog "  dism-health        - Fast health check of Windows component store"
+                writeToLog "  dism-scan          - Deep scan for component store corruption"
+                writeToLog "  dism /online /cleanup-image /restorehealth"
+                writeToLog "                     - Download & restore damaged components via WU"
+                writeToLog "  dism-clean         - Purge superseded updates & reclaim disk space"
+                writeToLog "  chkdsk C: /scan    - Online NTFS file system scan without reboot"
+                writeToLog "======================================================================"
+            | "net" | "network" ->
+                writeToLog "======================================================================"
+                writeToLog "                    NETWORK & CONNECTIVITY COMMANDS                   "
+                writeToLog "======================================================================"
+                writeToLog "  flushdns           - Flush and reset DNS resolver cache"
+                writeToLog "  netreset           - Reset Winsock & TCP/IP stack to factory defaults"
+                writeToLog "  ipconfig /all      - Detailed network adapter configuration"
+                writeToLog "  netstat -ano       - Display active listening ports & PID owners"
+                writeToLog "  ping 8.8.8.8       - Test connection and latency to Google DNS"
+                writeToLog "  ps Test-NetConnection -ComputerName google.com -Port 443"
+                writeToLog "                     - Test TCP port reachability via PowerShell"
+                writeToLog "======================================================================"
+            | "ps" | "powershell" ->
+                writeToLog "======================================================================"
+                writeToLog "                     POWERSHELL POWER-USER CMDLETS                    "
+                writeToLog "======================================================================"
+                writeToLog "  ps <script>        - Execute any PowerShell command as Administrator"
+                writeToLog "  top-cpu            - Show top 10 CPU-consuming processes"
+                writeToLog "  top-ram            - Show top 10 RAM-consuming processes"
+                writeToLog "  disk-health        - Check physical disk health status & media type"
+                writeToLog "  ps Get-Service | Where-Object Status -eq 'Running'"
+                writeToLog "                     - List all currently running background services"
+                writeToLog "  ps Get-ComputerInfo | Select-Object WindowsProductName, BiosBIOSVersion"
+                writeToLog "                     - Display motherboard BIOS & OS build info"
+                writeToLog "======================================================================"
+            | "power" | "disk" ->
+                writeToLog "======================================================================"
+                writeToLog "                      HARDWARE & STORAGE POWER TOOLS                  "
+                writeToLog "======================================================================"
+                writeToLog "  battery            - Generate detailed battery health report (HTML)"
+                writeToLog "  trim               - Send TRIM command to SSD (defrag C: /O)"
+                writeToLog "  hibernation-off    - Disable hibernation & delete hiberfil.sys (frees GBs)"
+                writeToLog "  hibernation-on     - Re-enable hibernation"
+                writeToLog "  reboot-bios        - Reboot directly into UEFI / BIOS settings"
+                writeToLog "======================================================================"
+            | _ ->
+                writeToLog "======================================================================"
+                writeToLog "                PLUMBYR ELEVATED COMMAND CENTER GUIDE                 "
+                writeToLog "======================================================================"
+                writeToLog "  [ELEVATED ADMIN] Running with full Administrator privileges."
+                writeToLog "  Supports CMD commands, PowerShell cmdlets, and built-in shortcuts."
+                writeToLog ""
+                writeToLog "[QUICK POWER SHORTCUTS]"
+                writeToLog "  flushdns           - Flush DNS resolver cache (ipconfig /flushdns)"
+                writeToLog "  netreset           - Reset Winsock & TCP/IP network stack"
+                writeToLog "  dism-health        - Fast check for Windows component store corruption"
+                writeToLog "  dism-clean         - Purge old Windows Update packages (frees GBs)"
+                writeToLog "  sfc                - Scan & fix corrupted Windows system files"
+                writeToLog "  trim               - Optimize / TRIM SSD drives (defrag C: /O)"
+                writeToLog "  battery            - Generate battery wear & health HTML report"
+                writeToLog "  top-cpu / top-ram  - View top 10 processes by CPU or RAM usage"
+                writeToLog "  disk-health        - Query physical disk health & media types"
+                writeToLog "  reboot-bios        - Reboot computer directly into UEFI / BIOS"
+                writeToLog ""
+                writeToLog "[POWERSHELL SUPPORT]"
+                writeToLog "  Prefix any command with 'ps ' or run cmdlets directly:"
+                writeToLog "  e.g.: ps Get-Service | Where-Object Status -eq 'Running'"
+                writeToLog "  e.g.: ps Test-NetConnection -ComputerName google.com -Port 443"
+                writeToLog ""
+                writeToLog "[PLUMBYR SHORTCUTS]"
+                writeToLog "  drivers            - Open Driver Management & Updates view"
+                writeToLog "  clean              - Open System Cleanup view"
+                writeToLog "  dashboard          - Return to System Overview dashboard"
+                writeToLog "  export             - Export terminal logs to a text file"
+                writeToLog "  clear / cls        - Clear the terminal screen"
+                writeToLog ""
+                writeToLog "Sub-guides: 'help repair', 'help net', 'help ps', 'help power'"
+                writeToLog "For raw Windows DOS command index, type: doshelp"
+                writeToLog "======================================================================"
+
+        let executeShellCommand (cmd: string) (isPowerShell: bool) =
             Thread(fun () ->
                 try
-                    let psi = ProcessStartInfo("cmd.exe", sprintf "/c %s" cmd)
+                    let psi =
+                        if isPowerShell then
+                            let psi = ProcessStartInfo("powershell.exe")
+                            psi.ArgumentList.Add("-NoProfile")
+                            psi.ArgumentList.Add("-NonInteractive")
+                            psi.ArgumentList.Add("-Command")
+                            psi.ArgumentList.Add(cmd)
+                            psi
+                        else
+                            let psi = ProcessStartInfo("cmd.exe")
+                            psi.ArgumentList.Add("/c")
+                            psi.ArgumentList.Add(cmd)
+                            psi
                     psi.RedirectStandardOutput <- true
                     psi.RedirectStandardError <- true
                     psi.UseShellExecute <- false
                     psi.CreateNoWindow <- true
                     let proc = Process.Start(psi)
                     proc.OutputDataReceived.Add(fun args -> if box args.Data <> null then writeToLog args.Data)
-                    proc.ErrorDataReceived.Add(fun args -> if box args.Data <> null then writeToLog (sprintf "ERROR: %s" args.Data))
+                    proc.ErrorDataReceived.Add(fun args -> if box args.Data <> null then writeToLog (sprintf "ERR: %s" args.Data))
                     proc.BeginOutputReadLine()
                     proc.BeginErrorReadLine()
                     proc.WaitForExit()
@@ -387,12 +536,85 @@ type MainWindow() as this =
                 with ex -> writeToLog (sprintf "EXECUTION ERROR: %s" ex.Message)
             ).Start()
 
+        let rec executeCommand (input: string) =
+            let trimmed = input.Trim()
+            if not (String.IsNullOrWhiteSpace trimmed) then
+                let lower = trimmed.ToLowerInvariant()
+                if lower = "drivers" || lower = "driver" then
+                    writeToLog "> drivers"
+                    showView "drivers" None "DRIVERS" driversView
+                elif lower = "clean" || lower = "cleanup" then
+                    writeToLog "> clean"
+                    showView "clean" (Some SystemTemporary) "SYSTEM CLEANUP" cleanerView
+                elif lower = "dashboard" || lower = "dash" then
+                    writeToLog "> dashboard"
+                    showView "dash" None "DASHBOARD" dashboardView
+                elif lower = "browsers" || lower = "browser" then
+                    writeToLog "> browsers"
+                    showView "browsers" None "BROWSER ANALYSIS" browserAnalysis
+                elif lower = "export" then
+                    writeToLog "> export"
+                    runExportHistory()
+                elif lower = "clear" || lower = "cls" then
+                    logEditor.Clear()
+                    writeToLog "--- OUTPUT CLEARED ---"
+                elif lower = "help" then
+                    writeToLog "> help"
+                    printHelpGuide ""
+                elif lower.StartsWith("help ") then
+                    let topic = trimmed.Substring(5).Trim()
+                    writeToLog (sprintf "> help %s" topic)
+                    printHelpGuide topic
+                elif lower = "doshelp" then
+                    writeToLog "> doshelp"
+                    executeShellCommand "help" false
+                else
+                    let (cmdToRun, isPowerShell) =
+                        match lower with
+                        | "flushdns" -> ("ipconfig /flushdns", false)
+                        | "netreset" -> ("netsh winsock reset && netsh int ip reset", false)
+                        | "trim" | "trim-ssd" -> ("defrag C: /O", false)
+                        | "dism-health" -> ("dism /online /cleanup-image /checkhealth", false)
+                        | "dism-scan" -> ("dism /online /cleanup-image /scanhealth", false)
+                        | "dism-clean" -> ("dism /online /cleanup-image /startcomponentcleanup", false)
+                        | "sfc" | "repair-system" -> ("sfc /scannow", false)
+                        | "hibernation-off" -> ("powercfg /hibernate off", false)
+                        | "hibernation-on" -> ("powercfg /hibernate on", false)
+                        | "battery" | "batteryreport" -> 
+                            let reportPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "battery_report.html")
+                            (sprintf "powercfg /batteryreport /output \"%s\"" reportPath, false)
+                        | "reboot-bios" | "uefi" -> ("shutdown /r /fw /t 5", false)
+                        | "top-cpu" ->
+                            ("Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 -Property Id, ProcessName, @{Name='CPU(s)';Expression={'{0:N2}' -f $_.CPU}}, @{Name='RAM(MB)';Expression={'{0:N1}' -f ($_.WorkingSet64/1MB)}} | Format-Table -AutoSize", true)
+                        | "top-ram" ->
+                            ("Get-Process | Sort-Object WorkingSet64 -Descending | Select-Object -First 10 -Property Id, ProcessName, @{Name='RAM(MB)';Expression={'{0:N1}' -f ($_.WorkingSet64/1MB)}} | Format-Table -AutoSize", true)
+                        | "disk-health" ->
+                            ("Get-PhysicalDisk | Format-Table -AutoSize FriendlyName, MediaType, HealthStatus, OperationalStatus, @{Name='Size(GB)';Expression={'{0:N1}' -f ($_.Size/1GB)}}", true)
+                        | _ ->
+                            if trimmed.StartsWith("ps ", StringComparison.OrdinalIgnoreCase) then
+                                (trimmed.Substring(3).Trim(), true)
+                            elif trimmed.StartsWith("powershell ", StringComparison.OrdinalIgnoreCase) then
+                                (trimmed.Substring(11).Trim(), true)
+                            elif trimmed.StartsWith("Get-", StringComparison.OrdinalIgnoreCase) ||
+                                 trimmed.StartsWith("Set-", StringComparison.OrdinalIgnoreCase) ||
+                                 trimmed.StartsWith("Test-", StringComparison.OrdinalIgnoreCase) ||
+                                 trimmed.StartsWith("Restart-", StringComparison.OrdinalIgnoreCase) ||
+                                 trimmed.StartsWith("Start-", StringComparison.OrdinalIgnoreCase) ||
+                                 trimmed.StartsWith("Stop-", StringComparison.OrdinalIgnoreCase) ||
+                                 trimmed.StartsWith("$") then
+                                (trimmed, true)
+                            else
+                                (trimmed, false)
+                    
+                    let promptPrefix = if isPowerShell then "PS >" else "CMD >"
+                    writeToLog (sprintf "%s %s" promptPrefix trimmed)
+                    executeShellCommand cmdToRun isPowerShell
+
         let runCommandInput () =
             if not (String.IsNullOrWhiteSpace(inputField.Text)) then
                 let cmd = inputField.Text.Trim()
-                writeToLog (sprintf "> %s" cmd)
                 inputField.Text <- ""
-                executeShellCommand cmd
+                executeCommand cmd
 
         inputField.KeyDown.Add(fun e ->
             if e.Key = Avalonia.Input.Key.Enter then
@@ -400,12 +622,12 @@ type MainWindow() as this =
         )
 
         runCommandBtn.Click.Add(fun _ -> runCommandInput())
-        helpQuickBtn.Click.Add(fun _ -> writeToLog "> help"; executeShellCommand "help")
-        networkQuickBtn.Click.Add(fun _ -> writeToLog "> ipconfig /all"; executeShellCommand "ipconfig /all")
-        windowsQuickBtn.Click.Add(fun _ -> writeToLog "> ver"; executeShellCommand "ver")
-        clearLogBtn.Click.Add(fun _ ->
-            logEditor.Clear()
-            writeToLog "--- OUTPUT CLEARED ---")
+        helpQuickBtn.Click.Add(fun _ -> executeCommand "help")
+        flushDnsQuickBtn.Click.Add(fun _ -> executeCommand "flushdns")
+        dismHealthQuickBtn.Click.Add(fun _ -> executeCommand "dism-health")
+        topProcQuickBtn.Click.Add(fun _ -> executeCommand "top-cpu")
+        batteryQuickBtn.Click.Add(fun _ -> executeCommand "battery")
+        clearLogBtn.Click.Add(fun _ -> executeCommand "clear")
 
         let loadSystemInfo () =
             try
@@ -441,42 +663,13 @@ type MainWindow() as this =
                     writeToLog (sprintf "DIAGNOSTICS ERROR: %s" ex.Message)
             ).Start()
 
-        let runExportHistory () =
-            async {
-                let options = FilePickerSaveOptions(
-                    Title = "Export Terminal Logs", 
-                    SuggestedFileName = "plumbyr_logs.txt", 
-                    DefaultExtension = "txt",
-                    FileTypeChoices = [| FilePickerFileType("Text Files", Patterns = [| "*.txt" |]) |])
-                
-                let! file = this.StorageProvider.SaveFilePickerAsync(options) |> Async.AwaitTask
-                
-                if box file <> null then
-                    try
-                        let logs = logEditor.Text
-                        use! stream = file.OpenWriteAsync() |> Async.AwaitTask
-                        use sw = new StreamWriter(stream)
-                        sw.WriteLine("PLUMBYR TERMINAL EXPORT")
-                        sw.WriteLine(sprintf "Generated on: %O" DateTime.Now)
-                        sw.WriteLine("==========================================")
-                        sw.Write(logs)
-                        
-                        Dispatcher.UIThread.Post(fun () -> 
-                            showView "term" None "COMMAND CENTER" terminalView
-                            writeToLog (sprintf "Terminal logs exported to: %s" file.Name)
-                            writeToLog "--- EXPORT COMPLETE ---")
-                    with ex -> 
-                        Dispatcher.UIThread.Post(fun () -> writeToLog (sprintf "ERROR EXPORTING LOGS: %s" ex.Message))
-            } |> Async.StartImmediate
-
         dashBtn.Click.Add(fun _ -> writeToLog "Switching to Dashboard..."; showView "dash" None "DASHBOARD" dashboardView)
         termBtn.Click.Add(fun _ -> writeToLog "Switching to Command Center..."; showView "term" None "COMMAND CENTER" terminalView)
         sysBtn.Click.Add(fun _ -> writeToLog "Switching to System Cleanup..."; showView "clean" (Some SystemTemporary) "SYSTEM CLEANUP" cleanerView)
         browserBtn.Click.Add(fun _ -> writeToLog "Switching to Browser Analysis..."; showView "browsers" None "BROWSER ANALYSIS" browserAnalysis)
         appsBtn.Click.Add(fun _ -> writeToLog "Switching to App Cleanup..."; showView "clean" (Some ApplicationCache) "APP CLEANUP" cleanerView)
         gameBtn.Click.Add(fun _ -> writeToLog "Switching to Gaming & GPU..."; showView "clean" (Some GamingCache) "GAMING & GPU" cleanerView)
-        diagBtn.Click.Add(fun _ -> runSystemDiagnostics())
-        diagQuickBtn.Click.Add(fun _ -> runSystemDiagnostics())
+        diagBtn.Click.Add(fun _ -> writeToLog "Switching to Drivers..."; showView "drivers" None "DRIVERS" driversView)
         histBtn.Click.Add(fun _ -> runExportHistory())
         dumpBtn.Click.Add(fun _ -> runSystemDiagnostics())
         

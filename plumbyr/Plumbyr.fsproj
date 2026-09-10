@@ -22,6 +22,8 @@
     <Compile Include="SystemInfo.fs" />
     <Compile Include="KuduBridge.fs" />
     <Compile Include="BrowserAnalysisView.fs" />
+    <Compile Include="DriverService.fs" />
+    <Compile Include="DriversView.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

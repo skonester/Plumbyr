@@ -6,7 +6,7 @@
     name="WindowsCleaner"
     type="win32"
   />
-  <description>Plumbyr - Windows Cleaner and Diagnostics</description>
+  <description>Plumbyr - Windows Cleaner and Driver Manager</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
