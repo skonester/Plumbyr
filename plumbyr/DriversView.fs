@@ -11,6 +11,9 @@ open Avalonia.Media
 open Avalonia.Data
 open Avalonia.Platform.Storage
 open Avalonia.Threading
+open Avalonia.Styling
+open Synthora.Controls
+open Synthora.Overlays
 
 // -----------------------------------------------------------------------
 // DataGrid row view-model
@@ -37,16 +40,25 @@ type DriversView(writeToLog: string -> unit, storage: IStorageProvider) as this 
     let mutable allDriverRows : DriverRow array = [||]
     let mutable classClasses  : string array     = [||]
 
+    // ----- theme resources (Synthora; app runs Dark-only so a static lookup is fine) -----
+    let brush (key: string) = Application.Current.FindResource(key) :?> IBrush
+    // Matches Plumbyr's near-black window background elsewhere in the app.
+    let cardBg = SolidColorBrush.Parse("#121212") :> IBrush
+    let textLow = brush "ThemeForegroundLowBrush"
+    let solidButtonTheme = Application.Current.FindResource("SolidButtonTheme") :?> ControlTheme
+
     // ----- UI controls -----
     let statusLabel =
         TextBlock(Text = "Ready. Use the toolbar to scan or update drivers.",
-                  Foreground = Brushes.Gray, FontSize = 13.0,
+                  Foreground = textLow, FontSize = 13.0,
                   TextWrapping = TextWrapping.Wrap)
 
     let progressBar =
         ProgressBar(Minimum = 0.0, Maximum = 100.0, Value = 0.0,
                     Height = 6.0, IsVisible = false)
 
+    // Kept as an explicit near-black / green console skin — a deliberate "terminal" look,
+    // not a stray hardcoded chrome color, so it isn't sourced from the theme palette.
     let logBox =
         TextBox(AcceptsReturn = true, IsReadOnly = true,
                 Background   = SolidColorBrush.Parse("#0a0a0a"),
@@ -65,30 +77,19 @@ type DriversView(writeToLog: string -> unit, storage: IStorageProvider) as this 
                  IsReadOnly           = true,
                  CanUserResizeColumns = true,
                  GridLinesVisibility  = DataGridGridLinesVisibility.Horizontal,
-                 Background           = SolidColorBrush.Parse("#0d0d0d"),
-                 RowBackground        = SolidColorBrush.Parse("#0d0d0d"),
-                 Foreground           = Brushes.White,
                  BorderThickness      = Thickness(0.0))
 
     let searchBox =
         TextBox(PlaceholderText   = "Search devices, drivers, manufacturers...",
                 Height            = 36.0, MinWidth = 280.0,
-                Background        = SolidColorBrush.Parse("#1a1a1a"),
-                Foreground        = Brushes.White,
-                BorderBrush       = SolidColorBrush.Parse("#333"),
-                BorderThickness   = Thickness(1.0),
-                CornerRadius      = CornerRadius(6.0),
                 Padding           = Thickness(8.0, 0.0))
 
     let classFilter =
         ComboBox(MinWidth       = 160.0,
-                 Height         = 36.0,
-                 Background     = SolidColorBrush.Parse("#1a1a1a"),
-                 Foreground     = Brushes.White,
-                 BorderBrush    = SolidColorBrush.Parse("#333"))
+                 Height         = 36.0)
 
     let driverCountTxt =
-        TextBlock(Foreground          = Brushes.Gray,
+        TextBlock(Foreground          = textLow,
                   FontSize            = 12.0,
                   VerticalAlignment   = VerticalAlignment.Center)
 
@@ -203,25 +204,27 @@ type DriversView(writeToLog: string -> unit, storage: IStorageProvider) as this 
         classFilter.ItemsSource   <- [| "All Classes" |]
         classFilter.SelectedIndex <- 0
 
-        // Action buttons
-        let mkBtn (text: string) (clr: string) =
-            Button(Content      = text,
-                   Height       = 38.0,
-                   Padding      = Thickness(16.0, 0.0),
-                   CornerRadius = CornerRadius(8.0),
-                   Background   = SolidColorBrush.Parse(clr),
-                   Foreground   = Brushes.White,
-                   FontWeight   = FontWeight.SemiBold,
-                   Margin       = Thickness(0.0, 0.0, 8.0, 0.0))
+        // Action buttons — solid Synthora button theme with semantic color classes
+        // instead of ad hoc hex, so they get proper hover/pressed states for free.
+        let mkBtn (text: string) (variant: string) =
+            let btn =
+                Button(Content      = text,
+                       Height       = 38.0,
+                       Padding      = Thickness(16.0, 0.0),
+                       FontWeight   = FontWeight.SemiBold,
+                       Margin       = Thickness(0.0, 0.0, 8.0, 0.0),
+                       Theme        = solidButtonTheme)
+            if variant <> "" then btn.Classes.Add(variant)
+            btn
 
-        let scanBtn       = mkBtn "Scan Drivers"               "#2563eb"
-        let checkUpdBtn   = mkBtn "Check Updates"              "#7c3aed"
-        let installUpdBtn = mkBtn "Install via Windows Update" "#059669"
-        let backupBtn     = mkBtn "Backup Drivers"             "#b45309"
-        let installFolBtn = mkBtn "Install from Folder"        "#0e7490"
-        let restoreBtn    = mkBtn "Restore Point"              "#374151"
-        let exportCsvBtn  = mkBtn "Export CSV"                 "#374151"
-        let cancelBtn     = mkBtn "Cancel"                     "#991b1b"
+        let scanBtn       = mkBtn "Scan Drivers"               "Primary"
+        let checkUpdBtn   = mkBtn "Check Updates"              "Question"
+        let installUpdBtn = mkBtn "Install via Windows Update" "Success"
+        let backupBtn     = mkBtn "Backup Drivers"             "Warning"
+        let installFolBtn = mkBtn "Install from Folder"        "Secondary"
+        let restoreBtn    = mkBtn "Restore Point"              ""
+        let exportCsvBtn  = mkBtn "Export CSV"                 ""
+        let cancelBtn     = mkBtn "Cancel"                     "Error"
 
         // Toolbar row 1
         let toolbar1 = WrapPanel(Orientation = Orientation.Horizontal,
@@ -243,12 +246,12 @@ type DriversView(writeToLog: string -> unit, storage: IStorageProvider) as this 
                                         FontWeight = FontWeight.Black))
         heading.Children.Add(TextBlock(Text = "Scan installed drivers, check for updates, backup, install, and manage restore points.",
                                         FontSize    = 14.0,
-                                        Foreground  = Brushes.Gray,
+                                        Foreground  = textLow,
                                         TextWrapping = TextWrapping.Wrap))
 
         // Status / progress strip
         let statusStrip =
-            Border(Background   = SolidColorBrush.Parse("#121212"),
+            Border(Background   = cardBg,
                    CornerRadius = CornerRadius(8.0),
                    Padding      = Thickness(16.0, 10.0),
                    Margin       = Thickness(0.0, 0.0, 0.0, 8.0))
@@ -256,7 +259,7 @@ type DriversView(writeToLog: string -> unit, storage: IStorageProvider) as this 
         statusStack.Children.AddRange [progressBar; statusLabel]
         statusStrip.Child <- statusStack
 
-        // Log box
+        // Log box — kept as the same deliberate terminal skin as logBox above.
         logScroll.Content <- logBox
         let logBorder =
             Border(Background       = SolidColorBrush.Parse("#0a0a0a"),
@@ -311,9 +314,18 @@ type DriversView(writeToLog: string -> unit, storage: IStorageProvider) as this 
 
         // Install via Windows Update
         installUpdBtn.Click.Add(fun _ ->
-            runTask "Windows Update Driver Install" (fun ct ->
-                DriverService.runWindowsUpdate ct appendLog setProgress
-            )
+            async {
+                let! result =
+                    AlertDialog.ShowAsync(
+                        "This will search Windows Update for driver updates and install them. Your system may need to restart.",
+                        "Confirm Driver Install",
+                        DialogButton.YesNo,
+                        IconType.Warning) |> Async.AwaitTask
+                if result = DialogResult.Yes then
+                    runTask "Windows Update Driver Install" (fun ct ->
+                        DriverService.runWindowsUpdate ct appendLog setProgress
+                    )
+            } |> Async.StartImmediate
         )
 
         // Backup drivers

@@ -12,7 +12,6 @@ open System.IO
 open System.Threading
 open System.Diagnostics
 open System.Collections.Generic
-open Avalonia.Themes.Fluent
 open Avalonia.Platform.Storage
 open AvaloniaEdit
 open AvaloniaEdit.Editing
@@ -20,6 +19,9 @@ open Serilog
 open Serilog.Core
 open Serilog.Events
 open ByteSizeLib
+open Synthora
+open Synthora.Controls
+open Synthora.Overlays
 
 type TerminalSink(onLog: string -> unit) =
     interface ILogEventSink with
@@ -47,19 +49,27 @@ module AppLogging =
 
         Log.Logger <- config.CreateLogger()
 
+// Identifies which section of the app a TreeMenu nav entry switches to.
+type NavKey =
+    | NavDashboard
+    | NavTerminal
+    | NavCleaner of CleanCategory
+    | NavBrowsers
+    | NavDrivers
+
 type MainWindow() as this =
     inherit Window()
-    
+
     let scanEngine = ScanEngine()
     let targetsList = StackPanel(Spacing = 8.0)
     let selectedGroups = HashSet<string>()
     let mutable currentScanResults: ScanTargetResult list = []
     let totalFreedTxt = TextBlock(FontSize = 18.0, FontWeight = FontWeight.SemiBold)
-    let totalFilesTxt = TextBlock(FontSize = 14.0, Foreground = Brushes.Gray)
-    let foundItemsTxt = TextBlock(FontSize = 14.0, Foreground = Brushes.Gray)
-    let selectionTxt = TextBlock(FontSize = 14.0, Foreground = Brushes.Gray)
-    let actionStatusTxt = TextBlock(FontSize = 13.0, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap)
-    
+    let totalFilesTxt = TextBlock(FontSize = 14.0)
+    let foundItemsTxt = TextBlock(FontSize = 14.0)
+    let selectionTxt = TextBlock(FontSize = 14.0)
+    let actionStatusTxt = TextBlock(FontSize = 13.0, TextWrapping = TextWrapping.Wrap)
+
     let dashboardView = ContentControl()
     let terminalView = ContentControl()
     let cleanerView = ContentControl()
@@ -75,7 +85,6 @@ type MainWindow() as this =
     let GAME_SVG = "M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"
     let DRIVER_SVG = "M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"
 
-    let mutable currentView = "dash"
     let mutable currentCategory: CleanCategory option = None
     let categoryTitle = TextBlock(FontSize = 28.0, FontWeight = FontWeight.Black)
 
@@ -105,28 +114,33 @@ type MainWindow() as this =
             Log.Warning(ex, "Unable to load window icon from {IconPath}", iconPath)
         this.Width <- 1200.0; this.Height <- 850.0
         this.WindowStartupLocation <- WindowStartupLocation.CenterScreen
-        
-        let mainContent = Grid(Background = SolidColorBrush.Parse("#080808"))
-        mainContent.ColumnDefinitions.Add(ColumnDefinition(Width = GridLength(260.0)))
-        mainContent.ColumnDefinitions.Add(ColumnDefinition(Width = GridLength.Star))
-        mainContent.IsHitTestVisible <- true
-        
-        this.Background <- SolidColorBrush.Parse("#080808")
+
+        // Resolve Synthora theme resources once (the app always runs in Dark mode,
+        // so a one-time static lookup is sufficient - no need for reactive DynamicResource
+        // bindings on every element).
+        let brush (key: string) = Application.Current.FindResource(key) :?> IBrush
+        // Plumbyr's near-black backdrop is a deliberate brand choice (matches the terminal
+        // panels), kept explicit rather than sourced from Synthora's (lighter) gray palette.
+        let windowBg   = SolidColorBrush.Parse("#080808") :> IBrush
+        let cardBg     = SolidColorBrush.Parse("#121212") :> IBrush
+        let textLow    = brush "ThemeForegroundLowBrush"
+        let primary    = brush "PrimaryBrush"
+        let success    = brush "SuccessBrush"
+        let warning    = brush "WarningBrush"
+        let solidButtonTheme = Application.Current.FindResource("SolidButtonTheme") :?> Avalonia.Styling.ControlTheme
+        let borderlessButtonTheme = Application.Current.FindResource("BorderlessButtonTheme") :?> Avalonia.Styling.ControlTheme
+
+        this.Background <- windowBg
         this.ExtendClientAreaToDecorationsHint <- false
         this.WindowDecorations <- WindowDecorations.Full
         this.TransparencyLevelHint <- [| WindowTransparencyLevel.None |]
         this.TransparencyBackgroundFallback <- Brushes.Black
 
-        this.Content <- mainContent
-
         // Initialize History
         let historyPath = Path.Combine(AppFiles.dataDirectory(), "plumbyr_history.db")
         CleaningHistory.GetInstance().Initialize(historyPath)
 
-        // Sidebar
-        let sidebar = Border(BorderBrush = SolidColorBrush.Parse("#222222"), BorderThickness = Thickness(0.0, 0.0, 1.0, 0.0), Background = SolidColorBrush.Parse("#0c0c0c"), ZIndex = 100)
-        let sidebarGrid = Grid(RowDefinitions = RowDefinitions("Auto,*,Auto"))
-        
+        // Pane header: logo, title, subtitle
         let header = StackPanel(Margin = Thickness(20.0, 40.0, 20.0, 30.0))
         try
             if File.Exists(iconPath) then
@@ -134,73 +148,63 @@ type MainWindow() as this =
         with ex ->
             Log.Warning(ex, "Unable to load header icon from {IconPath}", iconPath)
         header.Children.Add(TextBlock(Text = "PLUMBYR", FontSize = 24.0, FontWeight = FontWeight.Black, HorizontalAlignment = HorizontalAlignment.Center))
-        header.Children.Add(TextBlock(Text = "Plumbing Linked Universal Maintenance & Binary Yield Reclaimer", FontSize = 10.0, Foreground = Brushes.Gray, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 210.0))
-        Grid.SetRow(header, 0); sidebarGrid.Children.Add(header)
+        let subtitle = TextBlock(Text = "Plumbing Linked Universal Maintenance & Binary Yield Reclaimer", FontSize = 10.0, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, MaxWidth = 210.0)
+        subtitle.Foreground <- textLow
+        header.Children.Add(subtitle)
 
-        let navStack = StackPanel(Spacing = 8.0, Margin = Thickness(15.0, 0.0, 15.0, 0.0))
-        let createNavBtn text svgData =
-            let btn = Button(Height = 50.0, HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = CornerRadius(12.0), Background = SolidColorBrush.Parse("#0c0c0c"))
-            let stack = StackPanel(Orientation = Orientation.Horizontal, Spacing = 15.0, IsHitTestVisible = false)
-            let icon = Avalonia.Controls.Shapes.Path(Data = Geometry.Parse(svgData), Fill = Brushes.Gray, Width = 18.0, Height = 18.0, Stretch = Stretch.Uniform)
-            stack.Children.Add(icon)
+        let makeNavHeader (text: string) (svgData: string) =
+            let stack = StackPanel(Orientation = Orientation.Horizontal, Spacing = 12.0)
+            stack.Children.Add(PathIcon(Data = Geometry.Parse(svgData), Width = 18.0, Height = 18.0))
             stack.Children.Add(TextBlock(Text = text, VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeight.SemiBold))
-            btn.Content <- stack
-            btn
+            stack :> obj
 
-        let dashBtn = createNavBtn "Dashboard" DASH_SVG
-        let termBtn = createNavBtn "Command Center" TERM_SVG
-        let sysBtn = createNavBtn "System Cleanup" SYS_SVG
-        let browserBtn = createNavBtn "Browsers" BROWSER_SVG
-        let appsBtn = createNavBtn "Applications" APPS_SVG
-        let gameBtn = createNavBtn "Gaming & GPU" GAME_SVG
-        let diagBtn = createNavBtn "Drivers" DRIVER_SVG
-        let histBtn = createNavBtn "Export History" HIST_SVG
-
-        navStack.Children.AddRange [dashBtn; termBtn; sysBtn; browserBtn; appsBtn; gameBtn; diagBtn; histBtn]
-        Grid.SetRow(navStack, 1); sidebarGrid.Children.Add(navStack)
-
-        sidebar.Child <- sidebarGrid
-        Grid.SetColumn(sidebar, 0); mainContent.Children.Add(sidebar)
-
-        let transition = ContentControl(IsHitTestVisible = true)
-        transition.Background <- SolidColorBrush.Parse("#080808")
-        Grid.SetColumn(transition, 1)
-        mainContent.Children.Add(transition)
+        let makeNavItem (text: string) (svgData: string) (content: Control) (key: NavKey) =
+            let item = TreeMenuItem(Content = content)
+            item.Header <- makeNavHeader text svgData
+            item.Tag <- box key
+            item
 
         // Dashboard View Setup
         let dashGrid = Grid(RowDefinitions = RowDefinitions("Auto,Auto,*"), Margin = Thickness(30.0))
         let welcomeHeader = StackPanel(Margin = Thickness(0.0, 0.0, 0.0, 30.0))
         welcomeHeader.Children.Add(TextBlock(Text = "System Overview", FontSize = 42.0, FontWeight = FontWeight.Black))
-        welcomeHeader.Children.Add(TextBlock(Text = "Real-time hardware status and optimization.", FontSize = 16.0, Foreground = Brushes.Gray))
+        let welcomeSub = TextBlock(Text = "Real-time hardware status and optimization.", FontSize = 16.0)
+        welcomeSub.Foreground <- textLow
+        welcomeHeader.Children.Add(welcomeSub)
         Grid.SetRow(welcomeHeader, 0)
-        
+
         let statsRow = Grid(ColumnDefinitions = ColumnDefinitions("*,*,*"), Margin = Thickness(0.0, 0.0, 0.0, 30.0))
-        let createStatCard title value color =
-            let card = Border(Background = SolidColorBrush.Parse("#121212"), CornerRadius = CornerRadius(12.0), Margin = Thickness(5.0), Padding = Thickness(25.0))
+        let createStatCard title value (color: IBrush) =
+            let card = Border(Background = cardBg, CornerRadius = CornerRadius(12.0), Margin = Thickness(5.0), Padding = Thickness(25.0))
             let stack = StackPanel(Spacing = 8.0)
-            stack.Children.Add(TextBlock(Text = title, FontSize = 12.0, FontWeight = FontWeight.Bold, Foreground = Brushes.Gray))
+            let titleTxt = TextBlock(Text = title, FontSize = 12.0, FontWeight = FontWeight.Bold)
+            titleTxt.Foreground <- textLow
+            stack.Children.Add(titleTxt)
             let valTxt = TextBlock(Text = value, FontSize = 28.0, FontWeight = FontWeight.Black, Foreground = color)
             stack.Children.Add(valTxt)
             card.Child <- stack
             (card, valTxt)
 
-        let (reclaimCard, reclaimVal: TextBlock) = createStatCard "DISK RECLAIMED" "0.00 GB" Brushes.DodgerBlue
-        let (filesCard, filesVal: TextBlock) = createStatCard "TOTAL PURGED" "0" Brushes.LimeGreen
-        let (healthCard, healthVal: TextBlock) = createStatCard "SYSTEM STATUS" "READY" Brushes.Orange
-        
+        let (reclaimCard, reclaimVal: TextBlock) = createStatCard "DISK RECLAIMED" "0.00 GB" primary
+        let (filesCard, filesVal: TextBlock) = createStatCard "TOTAL PURGED" "0" success
+        let (healthCard, healthVal: TextBlock) = createStatCard "SYSTEM STATUS" "READY" warning
+
         Grid.SetColumn(reclaimCard, 0); statsRow.Children.Add(reclaimCard)
         Grid.SetColumn(filesCard, 1); statsRow.Children.Add(filesCard)
         Grid.SetColumn(healthCard, 2); statsRow.Children.Add(healthCard)
         Grid.SetRow(statsRow, 1)
 
         let infoGrid = Grid(ColumnDefinitions = ColumnDefinitions("*,*"))
-        let leftInfo = Border(Background = SolidColorBrush.Parse("#121212"), CornerRadius = CornerRadius(12.0), Margin = Thickness(0.0, 0.0, 10.0, 0.0), Padding = Thickness(30.0))
+        let leftInfo = Border(Background = cardBg, CornerRadius = CornerRadius(12.0), Margin = Thickness(0.0, 0.0, 10.0, 0.0), Padding = Thickness(30.0))
         let hardwareStack = StackPanel(Spacing = 15.0)
-        hardwareStack.Children.Add(TextBlock(Text = "HARDWARE SPECIFICATIONS", FontSize = 14.0, FontWeight = FontWeight.Bold, Foreground = Brushes.Gray, Margin = Thickness(0.0, 0.0, 0.0, 15.0)))
-        
+        let hardwareTitle = TextBlock(Text = "HARDWARE SPECIFICATIONS", FontSize = 14.0, FontWeight = FontWeight.Bold, Margin = Thickness(0.0, 0.0, 0.0, 15.0))
+        hardwareTitle.Foreground <- textLow
+        hardwareStack.Children.Add(hardwareTitle)
+
         let createInfoLine label value =
             let grid = Grid(ColumnDefinitions = ColumnDefinitions("140,*"))
-            let lbl = TextBlock(Text = label, Foreground = Brushes.Gray, FontSize = 14.0)
+            let lbl = TextBlock(Text = label, FontSize = 14.0)
+            lbl.Foreground <- textLow
             let valTxt = TextBlock(Text = value, FontWeight = FontWeight.SemiBold, FontSize = 14.0)
             Grid.SetColumn(lbl, 0); grid.Children.Add(lbl)
             Grid.SetColumn(valTxt, 1); grid.Children.Add(valTxt)
@@ -210,16 +214,18 @@ type MainWindow() as this =
         let (cpuGrid, cpuVal) = createInfoLine "CPU" "Loading..."
         let (ramGrid, ramVal) = createInfoLine "Memory" "Loading..."
         let (gpuGrid, gpuVal) = createInfoLine "GPU" "Loading..."
-        
+
         let dumpBtn = Button(Content = "GENERATE FULL DXDIAG DUMP", HorizontalAlignment = HorizontalAlignment.Stretch, Height = 60.0, Margin = Thickness(0.0, 30.0, 0.0, 0.0))
-        
+
         hardwareStack.Children.AddRange [osGrid; cpuGrid; ramGrid; gpuGrid; dumpBtn]
         leftInfo.Child <- hardwareStack
         Grid.SetColumn(leftInfo, 0)
 
-        let rightInfo = Border(Background = SolidColorBrush.Parse("#121212"), CornerRadius = CornerRadius(12.0), Margin = Thickness(10.0, 0.0, 0.0, 0.0), Padding = Thickness(30.0))
+        let rightInfo = Border(Background = cardBg, CornerRadius = CornerRadius(12.0), Margin = Thickness(10.0, 0.0, 0.0, 0.0), Padding = Thickness(30.0))
         let healthStack = StackPanel(Spacing = 20.0, VerticalAlignment = VerticalAlignment.Center)
-        healthStack.Children.Add(TextBlock(Text = "OPTIMIZATION GRAPH", FontSize = 14.0, FontWeight = FontWeight.Bold, Foreground = Brushes.Gray, HorizontalAlignment = HorizontalAlignment.Center))
+        let graphTitle = TextBlock(Text = "OPTIMIZATION GRAPH", FontSize = 14.0, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center)
+        graphTitle.Foreground <- textLow
+        healthStack.Children.Add(graphTitle)
         let healthCircle = ProgressBar(Width = 220.0, Height = 12.0, Minimum = 0.0, Maximum = 100.0, Value = 0.0)
         let healthValueTxt: TextBlock = TextBlock(Text = "0%", FontSize = 32.0, FontWeight = FontWeight.Black, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center)
         let circleContainer = StackPanel(Spacing = 12.0, HorizontalAlignment = HorizontalAlignment.Center)
@@ -228,28 +234,29 @@ type MainWindow() as this =
         healthStack.Children.Add(TextBlock(Text = "System Health Score", FontSize = 16.0, HorizontalAlignment = HorizontalAlignment.Center))
         rightInfo.Child <- healthStack
         Grid.SetColumn(rightInfo, 1)
-        
+
         Grid.SetRow(infoGrid, 2)
         dashGrid.Children.AddRange [welcomeHeader; statsRow; infoGrid]
         dashboardView.Content <- dashGrid
 
         // Terminal View
         let logGrid = Grid(RowDefinitions = RowDefinitions("Auto,Auto,*,Auto"), Margin = Thickness(30.0))
-        let logHeader = Border(Background = SolidColorBrush.Parse("#121212"), CornerRadius = CornerRadius(8.0), Padding = Thickness(20.0), Margin = Thickness(0.0, 0.0, 0.0, 12.0))
+        let logHeader = Border(Background = cardBg, CornerRadius = CornerRadius(8.0), Padding = Thickness(20.0), Margin = Thickness(0.0, 0.0, 0.0, 12.0))
         let logHeaderStack = StackPanel(Spacing = 6.0)
         let titleRow = StackPanel(Orientation = Orientation.Horizontal, Spacing = 12.0)
-        titleRow.Children.Add(TextBlock(Text = "Command Center & Maintenance Console", FontWeight = FontWeight.Bold, Foreground = Brushes.White, FontSize = 18.0))
-        let adminBadge = Border(Background = SolidColorBrush.Parse("#052e16"), BorderBrush = SolidColorBrush.Parse("#16a34a"), BorderThickness = Thickness(1.0), CornerRadius = CornerRadius(4.0), Padding = Thickness(8.0, 2.0), VerticalAlignment = VerticalAlignment.Center)
-        adminBadge.Child <- TextBlock(Text = "● ELEVATED ADMIN", FontSize = 11.0, FontWeight = FontWeight.Bold, Foreground = Brushes.LimeGreen)
+        titleRow.Children.Add(TextBlock(Text = "Command Center & Maintenance Console", FontWeight = FontWeight.Bold, FontSize = 18.0))
+        let adminBadge = Tag(Content = "ELEVATED ADMIN", TagType = TagType.Success, IsSolid = true, VerticalAlignment = VerticalAlignment.Center)
         titleRow.Children.Add(adminBadge)
         logHeaderStack.Children.Add(titleRow)
-        logHeaderStack.Children.Add(TextBlock(Text = "Execute elevated Windows repairs, native PowerShell cmdlets, network resets, and PC maintenance routines.", Foreground = Brushes.Gray, FontSize = 13.0, TextWrapping = TextWrapping.Wrap))
+        let consoleDesc = TextBlock(Text = "Execute elevated Windows repairs, native PowerShell cmdlets, network resets, and PC maintenance routines.", FontSize = 13.0, TextWrapping = TextWrapping.Wrap)
+        consoleDesc.Foreground <- textLow
+        logHeaderStack.Children.Add(consoleDesc)
         logHeader.Child <- logHeaderStack
         Grid.SetRow(logHeader, 0)
 
         let terminalActions = StackPanel(Orientation = Orientation.Horizontal, Spacing = 10.0, Margin = Thickness(0.0, 0.0, 0.0, 12.0))
         let createTerminalAction text =
-            Button(Content = text, Height = 38.0, MinWidth = 118.0, Padding = Thickness(14.0, 0.0), CornerRadius = CornerRadius(8.0), Background = SolidColorBrush.Parse("#1f2937"), Foreground = Brushes.White)
+            Button(Content = text, Height = 38.0, MinWidth = 118.0, Padding = Thickness(14.0, 0.0))
         let helpQuickBtn = createTerminalAction "📖 Help Guide"
         let flushDnsQuickBtn = createTerminalAction "⚡ Flush DNS"
         let dismHealthQuickBtn = createTerminalAction "🛡️ DISM Health"
@@ -258,13 +265,13 @@ type MainWindow() as this =
         let clearLogBtn = createTerminalAction "🧹 Clear"
         terminalActions.Children.AddRange [helpQuickBtn; flushDnsQuickBtn; dismHealthQuickBtn; topProcQuickBtn; batteryQuickBtn; clearLogBtn]
         Grid.SetRow(terminalActions, 1)
-        
+
         let logEditor = TextEditor(Background = SolidColorBrush.Parse("#080808"), Foreground = Brushes.LimeGreen, FontSize = 13.0, FontFamily = FontFamily("Consolas"), IsReadOnly = true, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Visible, WordWrap = true)
         logEditor.Options.EnableRectangularSelection <- true
         logEditor.Options.EnableTextDragDrop <- true
-        
+
         Grid.SetRow(logEditor, 2)
-        
+
         let inputRow = Grid(ColumnDefinitions = ColumnDefinitions("Auto,*,110"), Margin = Thickness(0.0, 15.0, 0.0, 0.0))
         let promptBadge = Border(
             Background = SolidColorBrush.Parse("#1a1a1a"),
@@ -284,11 +291,12 @@ type MainWindow() as this =
 
         let inputField = TextBox(PlaceholderText = "Type a command (e.g. 'help', 'flushdns', 'ps Get-Process', 'sfc')...", Height = 45.0, VerticalContentAlignment = VerticalAlignment.Center, Background = SolidColorBrush.Parse("#121212"), Foreground = Brushes.White, BorderThickness = Thickness(0.0, 1.0, 1.0, 1.0), CornerRadius = CornerRadius(0.0, 8.0, 8.0, 0.0), BorderBrush = SolidColorBrush.Parse("#333"))
         Grid.SetColumn(inputField, 1)
-        let runCommandBtn = Button(Content = "Run", Height = 45.0, Margin = Thickness(10.0, 0.0, 0.0, 0.0), FontWeight = FontWeight.Bold, CornerRadius = CornerRadius(8.0), Background = SolidColorBrush.Parse("#2563eb"), Foreground = Brushes.White)
+        let runCommandBtn = Button(Content = "Run", Height = 45.0, Margin = Thickness(10.0, 0.0, 0.0, 0.0), FontWeight = FontWeight.Bold, Theme = solidButtonTheme)
+        runCommandBtn.Classes.Add("Primary")
         Grid.SetColumn(runCommandBtn, 2)
         inputRow.Children.AddRange [promptBadge; inputField; runCommandBtn]
         Grid.SetRow(inputRow, 3)
-        
+
         logGrid.Children.AddRange [logHeader; terminalActions; logEditor; inputRow]
         terminalView.Content <- logGrid
 
@@ -298,11 +306,15 @@ type MainWindow() as this =
         categoryTitle.Margin <- Thickness(0.0, 0.0, 0.0, 4.0); categoryTitle.FontSize <- 32.0
         let titleStack = StackPanel(Spacing = 4.0)
         titleStack.Children.Add(categoryTitle)
-        titleStack.Children.Add(TextBlock(Text = "Select what to analyze, review real sizes, then clean only the checked groups.", Foreground = Brushes.Gray, FontSize = 14.0))
+        let cleanerSub = TextBlock(Text = "Select what to analyze, review real sizes, then clean only the checked groups.", FontSize = 14.0)
+        cleanerSub.Foreground <- textLow
+        titleStack.Children.Add(cleanerSub)
         Grid.SetColumn(titleStack, 0)
         let headerStats = StackPanel(Orientation = Orientation.Horizontal, Spacing = 18.0, VerticalAlignment = VerticalAlignment.Center)
         foundItemsTxt.Text <- "FOUND: 0 ITEMS"
+        foundItemsTxt.Foreground <- textLow
         selectionTxt.Text <- "SELECTED: 0"
+        selectionTxt.Foreground <- textLow
         headerStats.Children.AddRange [foundItemsTxt; selectionTxt]
         Grid.SetColumn(headerStats, 1)
         headerGrid.Children.AddRange [titleStack; headerStats]
@@ -311,40 +323,46 @@ type MainWindow() as this =
         let cleanGrid = Grid(ColumnDefinitions = ColumnDefinitions("*,320"))
         let listContainer = Grid(RowDefinitions = RowDefinitions("Auto,*"))
         let listHeader = Grid(ColumnDefinitions = ColumnDefinitions("*,110,110"), Margin = Thickness(0.0, 0.0, 8.0, 8.0))
-        listHeader.Children.Add(TextBlock(Text = "Cleaner", Foreground = Brushes.Gray, FontWeight = FontWeight.Bold, FontSize = 12.0))
-        let sizeHeader = TextBlock(Text = "Size", Foreground = Brushes.Gray, FontWeight = FontWeight.Bold, FontSize = 12.0, HorizontalAlignment = HorizontalAlignment.Right)
+        let cleanerColTxt = TextBlock(Text = "Cleaner", FontWeight = FontWeight.Bold, FontSize = 12.0)
+        cleanerColTxt.Foreground <- textLow
+        listHeader.Children.Add(cleanerColTxt)
+        let sizeHeader = TextBlock(Text = "Size", FontWeight = FontWeight.Bold, FontSize = 12.0, HorizontalAlignment = HorizontalAlignment.Right)
+        sizeHeader.Foreground <- textLow
         Grid.SetColumn(sizeHeader, 1); listHeader.Children.Add(sizeHeader)
-        let filesHeader = TextBlock(Text = "Files", Foreground = Brushes.Gray, FontWeight = FontWeight.Bold, FontSize = 12.0, HorizontalAlignment = HorizontalAlignment.Right)
+        let filesHeader = TextBlock(Text = "Files", FontWeight = FontWeight.Bold, FontSize = 12.0, HorizontalAlignment = HorizontalAlignment.Right)
+        filesHeader.Foreground <- textLow
         Grid.SetColumn(filesHeader, 2); listHeader.Children.Add(filesHeader)
         Grid.SetRow(listHeader, 0)
         let scroll = ScrollViewer(Content = targetsList)
         Grid.SetRow(scroll, 1)
         listContainer.Children.AddRange [listHeader; scroll]
         Grid.SetColumn(listContainer, 0)
-        
+
         let actionPanel = StackPanel(Spacing = 14.0, Margin = Thickness(24.0, 0.0, 0.0, 0.0))
-        let createPillBtn text (color: IBrush) =
-            let btn = Button(Content = text, Height = 52.0, HorizontalAlignment = HorizontalAlignment.Stretch, FontWeight = FontWeight.Bold, FontSize = 15.0, CornerRadius = CornerRadius(8.0), Background = color)
+        let createPillBtn text (variant: string) =
+            let btn = Button(Content = text, Height = 52.0, HorizontalAlignment = HorizontalAlignment.Stretch, FontWeight = FontWeight.Bold, FontSize = 15.0, Theme = solidButtonTheme)
+            if variant <> "" then btn.Classes.Add(variant)
             btn
-        let scanBtn = createPillBtn "Analyze" (SolidColorBrush.Parse("#2563eb"))
-        let executeBtn = createPillBtn "Clean selected" (SolidColorBrush.Parse("#16a34a"))
-        let selectAllBtn = createPillBtn "Select all" (SolidColorBrush.Parse("#27272a"))
-        let selectNoneBtn = createPillBtn "Select none" (SolidColorBrush.Parse("#27272a"))
-        let summaryPanel = Border(Background = SolidColorBrush.Parse("#121212"), CornerRadius = CornerRadius(8.0), Padding = Thickness(16.0), Margin = Thickness(0.0, 10.0, 0.0, 0.0))
+        let scanBtn = createPillBtn "Analyze" "Primary"
+        let executeBtn = createPillBtn "Clean selected" "Success"
+        let selectAllBtn = createPillBtn "Select all" ""
+        let selectNoneBtn = createPillBtn "Select none" ""
+        let summaryPanel = Border(Background = cardBg, CornerRadius = CornerRadius(8.0), Padding = Thickness(16.0), Margin = Thickness(0.0, 10.0, 0.0, 0.0))
         let summaryStack = StackPanel(Spacing = 8.0)
         summaryStack.Children.Add(TextBlock(Text = "Scan Summary", FontWeight = FontWeight.Bold, FontSize = 14.0))
         actionStatusTxt.Text <- "Analyze first to calculate real reclaimable space."
+        actionStatusTxt.Foreground <- textLow
         summaryStack.Children.Add(actionStatusTxt)
         summaryPanel.Child <- summaryStack
         actionPanel.Children.AddRange [scanBtn; executeBtn; selectAllBtn; selectNoneBtn; summaryPanel]
         Grid.SetColumn(actionPanel, 1)
         cleanGrid.Children.AddRange [listContainer; actionPanel]
         Grid.SetRow(cleanGrid, 1)
-        
-        let bottomStats = Border(Background = SolidColorBrush.Parse("#121212"), CornerRadius = CornerRadius(8.0), Height = 58.0, Margin = Thickness(0.0, 22.0, 0.0, 0.0))
+
+        let bottomStats = Border(Background = cardBg, CornerRadius = CornerRadius(8.0), Height = 58.0, Margin = Thickness(0.0, 22.0, 0.0, 0.0))
         let bottomStack = StackPanel(Orientation = Orientation.Horizontal, Spacing = 40.0, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center)
-        totalFreedTxt.Text <- "RECLAIMABLE: 0 B"; totalFreedTxt.Foreground <- Brushes.DodgerBlue; totalFreedTxt.FontSize <- 16.0; totalFreedTxt.FontWeight <- FontWeight.Bold
-        totalFilesTxt.Text <- "FILES: 0"; totalFilesTxt.Foreground <- Brushes.Gray; totalFilesTxt.FontSize <- 16.0; totalFilesTxt.FontWeight <- FontWeight.Bold
+        totalFreedTxt.Text <- "RECLAIMABLE: 0 B"; totalFreedTxt.Foreground <- primary; totalFreedTxt.FontSize <- 16.0; totalFreedTxt.FontWeight <- FontWeight.Bold
+        totalFilesTxt.Text <- "FILES: 0"; totalFilesTxt.Foreground <- textLow; totalFilesTxt.FontSize <- 16.0; totalFilesTxt.FontWeight <- FontWeight.Bold
         bottomStack.Children.AddRange [totalFreedTxt; totalFilesTxt]
         bottomStats.Child <- bottomStack
         Grid.SetRow(bottomStats, 2)
@@ -352,23 +370,23 @@ type MainWindow() as this =
         cleanerView.Content <- cleanerMain
 
         // UI Logic
-        let writeToLog (msg: string) = 
-            Dispatcher.UIThread.Post(fun () -> 
+        let writeToLog (msg: string) =
+            Dispatcher.UIThread.Post(fun () ->
                 try
                     logEditor.AppendText(sprintf "[%s] %s\n" (DateTime.Now.ToString("HH:mm:ss")) msg)
                     logEditor.ScrollToEnd()
                 with _ -> ()
             )
-        
+
         scanEngine.OnFileProcessed.Add(writeToLog)
-        
+
         AppLogging.configure (Some writeToLog)
-            
+
         Log.Information("Plumbyr Started")
         writeToLog "--- COMMAND CENTER INITIALIZED (ELEVATED ADMIN) ---"
         writeToLog "Plumbyr Power-User Terminal ready. CMD & PowerShell enabled."
         writeToLog "Type 'help' for available commands or use the quick actions above."
-        
+
         // Real-time Stats during Purge
         scanEngine.OnFileProcessed.Add(fun _ ->
             Dispatcher.UIThread.Post(fun () ->
@@ -381,29 +399,46 @@ type MainWindow() as this =
             )
         )
 
-        let showView view cat name content =
-            currentView <- view
-            currentCategory <- cat
-            categoryTitle.Text <- name
-            transition.Content <- content
-            this.PopulateTargets()
-
-        let browserAnalysis = new BrowserAnalysisView(writeToLog, fun () ->
-            showView "clean" (Some BrowserCache) "BROWSER CLEANUP" cleanerView)
+        // BrowserAnalysisView's "Open cleanup rules" button needs to jump into the cleaner
+        // view pre-filtered to browser-cache targets; the nav items it depends on don't exist
+        // yet, so it's wired up via this mutable indirection once they're built below.
+        let mutable openCleanupFromBrowsers : unit -> unit = fun () -> ()
+        let browserAnalysis = new BrowserAnalysisView(writeToLog, fun () -> openCleanupFromBrowsers())
         this.Closed.Add(fun _ -> (browserAnalysis :> IDisposable).Dispose())
 
         let driversView = new DriversView(writeToLog, this.StorageProvider)
 
+        // Navigation: a Synthora TreeMenu replaces the hand-rolled sidebar + view switcher.
+        // Selecting an item both shows its Content and (via SelectionChanged below) triggers
+        // the equivalent side effects the old button-click handlers used to run.
+        let dashItem    = makeNavItem "Dashboard" DASH_SVG dashboardView NavDashboard
+        let termItem    = makeNavItem "Command Center" TERM_SVG terminalView NavTerminal
+        let sysItem     = makeNavItem "System Cleanup" SYS_SVG cleanerView (NavCleaner SystemTemporary)
+        let browserItem = makeNavItem "Browsers" BROWSER_SVG (browserAnalysis :> Control) NavBrowsers
+        let appsItem    = makeNavItem "Applications" APPS_SVG cleanerView (NavCleaner ApplicationCache)
+        let gameItem    = makeNavItem "Gaming & GPU" GAME_SVG cleanerView (NavCleaner GamingCache)
+        let driverItem  = makeNavItem "Drivers" DRIVER_SVG (driversView :> Control) NavDrivers
+
+        let treeMenu = TreeMenu(Header = "PLUMBYR")
+        treeMenu.PaneHeader <- header
+        treeMenu.Items.Add(dashItem) |> ignore
+        treeMenu.Items.Add(termItem) |> ignore
+        treeMenu.Items.Add(sysItem) |> ignore
+        treeMenu.Items.Add(browserItem) |> ignore
+        treeMenu.Items.Add(appsItem) |> ignore
+        treeMenu.Items.Add(gameItem) |> ignore
+        treeMenu.Items.Add(driverItem) |> ignore
+
         let runExportHistory () =
             async {
                 let options = FilePickerSaveOptions(
-                    Title = "Export Terminal Logs", 
-                    SuggestedFileName = "plumbyr_logs.txt", 
+                    Title = "Export Terminal Logs",
+                    SuggestedFileName = "plumbyr_logs.txt",
                     DefaultExtension = "txt",
                     FileTypeChoices = [| FilePickerFileType("Text Files", Patterns = [| "*.txt" |]) |])
-                
+
                 let! file = this.StorageProvider.SaveFilePickerAsync(options) |> Async.AwaitTask
-                
+
                 if box file <> null then
                     try
                         let logs = logEditor.Text
@@ -413,14 +448,65 @@ type MainWindow() as this =
                         sw.WriteLine(sprintf "Generated on: %O" DateTime.Now)
                         sw.WriteLine("==========================================")
                         sw.Write(logs)
-                        
-                        Dispatcher.UIThread.Post(fun () -> 
-                            showView "term" None "COMMAND CENTER" terminalView
+
+                        Dispatcher.UIThread.Post(fun () ->
+                            treeMenu.SelectedItem <- termItem
                             writeToLog (sprintf "Terminal logs exported to: %s" file.Name)
                             writeToLog "--- EXPORT COMPLETE ---")
-                    with ex -> 
+                    with ex ->
                         Dispatcher.UIThread.Post(fun () -> writeToLog (sprintf "ERROR EXPORTING LOGS: %s" ex.Message))
             } |> Async.StartImmediate
+
+        // Export History lives in the pane footer since it's an action, not a page.
+        let exportBtn = Button(Theme = borderlessButtonTheme, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left, Margin = Thickness(15.0, 6.0, 15.0, 15.0))
+        exportBtn.Content <- makeNavHeader "Export History" HIST_SVG
+        treeMenu.PaneFooter <- exportBtn
+        exportBtn.Click.Add(fun _ -> writeToLog "> export"; runExportHistory())
+
+        openCleanupFromBrowsers <- fun () ->
+            treeMenu.SelectedItem <- sysItem
+            currentCategory <- Some BrowserCache
+            categoryTitle.Text <- "BROWSER CLEANUP"
+            this.PopulateTargets()
+
+        let categoryTitleFor = function
+            | SystemTemporary -> "SYSTEM CLEANUP"
+            | ApplicationCache -> "APP CLEANUP"
+            | GamingCache -> "GAMING & GPU"
+            | BrowserCache -> "BROWSER CLEANUP"
+            | _ -> "SYSTEM CLEANUP"
+
+        treeMenu.SelectionChanged.Add(fun _ ->
+            match treeMenu.SelectedItem with
+            | :? TreeMenuItem as item ->
+                match item.Tag with
+                | :? NavKey as key ->
+                    match key with
+                    | NavDashboard ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "DASHBOARD"
+                        writeToLog "Switching to Dashboard..."
+                    | NavTerminal ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "COMMAND CENTER"
+                        writeToLog "Switching to Command Center..."
+                    | NavCleaner cat ->
+                        currentCategory <- Some cat
+                        categoryTitle.Text <- categoryTitleFor cat
+                        writeToLog (sprintf "Switching to %s..." (categoryTitleFor cat))
+                        this.PopulateTargets()
+                    | NavBrowsers ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "BROWSER ANALYSIS"
+                        writeToLog "Switching to Browser Analysis..."
+                    | NavDrivers ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "DRIVERS"
+                        writeToLog "Switching to Drivers..."
+                | _ -> ()
+            | _ -> ())
+
+        let selectNav (item: TreeMenuItem) = treeMenu.SelectedItem <- item
 
         let printHelpGuide (topic: string) =
             match topic.Trim().ToLowerInvariant() with
@@ -542,16 +628,16 @@ type MainWindow() as this =
                 let lower = trimmed.ToLowerInvariant()
                 if lower = "drivers" || lower = "driver" then
                     writeToLog "> drivers"
-                    showView "drivers" None "DRIVERS" driversView
+                    selectNav driverItem
                 elif lower = "clean" || lower = "cleanup" then
                     writeToLog "> clean"
-                    showView "clean" (Some SystemTemporary) "SYSTEM CLEANUP" cleanerView
+                    selectNav sysItem
                 elif lower = "dashboard" || lower = "dash" then
                     writeToLog "> dashboard"
-                    showView "dash" None "DASHBOARD" dashboardView
+                    selectNav dashItem
                 elif lower = "browsers" || lower = "browser" then
                     writeToLog "> browsers"
-                    showView "browsers" None "BROWSER ANALYSIS" browserAnalysis
+                    selectNav browserItem
                 elif lower = "export" then
                     writeToLog "> export"
                     runExportHistory()
@@ -580,7 +666,7 @@ type MainWindow() as this =
                         | "sfc" | "repair-system" -> ("sfc /scannow", false)
                         | "hibernation-off" -> ("powercfg /hibernate off", false)
                         | "hibernation-on" -> ("powercfg /hibernate on", false)
-                        | "battery" | "batteryreport" -> 
+                        | "battery" | "batteryreport" ->
                             let reportPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "battery_report.html")
                             (sprintf "powercfg /batteryreport /output \"%s\"" reportPath, false)
                         | "reboot-bios" | "uefi" -> ("shutdown /r /fw /t 5", false)
@@ -605,7 +691,7 @@ type MainWindow() as this =
                                 (trimmed, true)
                             else
                                 (trimmed, false)
-                    
+
                     let promptPrefix = if isPowerShell then "PS >" else "CMD >"
                     writeToLog (sprintf "%s %s" promptPrefix trimmed)
                     executeShellCommand cmdToRun isPowerShell
@@ -651,7 +737,7 @@ type MainWindow() as this =
         loadSystemInfo()
 
         let runSystemDiagnostics () =
-            showView "term" None "COMMAND CENTER" terminalView
+            selectNav termItem
             writeToLog "--- GENERATING SYSTEM DIAGNOSTICS ---"
             Thread(fun () ->
                 try
@@ -663,16 +749,8 @@ type MainWindow() as this =
                     writeToLog (sprintf "DIAGNOSTICS ERROR: %s" ex.Message)
             ).Start()
 
-        dashBtn.Click.Add(fun _ -> writeToLog "Switching to Dashboard..."; showView "dash" None "DASHBOARD" dashboardView)
-        termBtn.Click.Add(fun _ -> writeToLog "Switching to Command Center..."; showView "term" None "COMMAND CENTER" terminalView)
-        sysBtn.Click.Add(fun _ -> writeToLog "Switching to System Cleanup..."; showView "clean" (Some SystemTemporary) "SYSTEM CLEANUP" cleanerView)
-        browserBtn.Click.Add(fun _ -> writeToLog "Switching to Browser Analysis..."; showView "browsers" None "BROWSER ANALYSIS" browserAnalysis)
-        appsBtn.Click.Add(fun _ -> writeToLog "Switching to App Cleanup..."; showView "clean" (Some ApplicationCache) "APP CLEANUP" cleanerView)
-        gameBtn.Click.Add(fun _ -> writeToLog "Switching to Gaming & GPU..."; showView "clean" (Some GamingCache) "GAMING & GPU" cleanerView)
-        diagBtn.Click.Add(fun _ -> writeToLog "Switching to Drivers..."; showView "drivers" None "DRIVERS" driversView)
-        histBtn.Click.Add(fun _ -> runExportHistory())
         dumpBtn.Click.Add(fun _ -> runSystemDiagnostics())
-        
+
         selectAllBtn.Click.Add(fun _ ->
             for target in targetsForCurrentCategory() do
                 selectedGroups.Add(groupKey target) |> ignore
@@ -685,18 +763,18 @@ type MainWindow() as this =
             this.PopulateTargets()
         )
 
-        scanBtn.Click.Add(fun _ -> 
+        scanBtn.Click.Add(fun _ ->
             actionStatusTxt.Text <- "Analyzing selected cleanup groups..."
             writeToLog "--- STARTING CLEANER ANALYSIS ---"
             let targets = selectedTargetsForCurrentCategory()
-            Thread(fun () -> 
+            Thread(fun () ->
                 try
                     let results = scanEngine.AnalyzeTargets(targets)
                     let bytes = results |> List.sumBy (fun r -> r.EstimatedBytes)
                     let files = results |> List.sumBy (fun r -> r.FileCount)
                     let found = results |> List.filter (fun r -> r.Exists) |> List.length
                     writeToLog (sprintf "ANALYSIS COMPLETE. Found %d rule paths, %d files, %s reclaimable." found files (formatBytes bytes))
-                    Dispatcher.UIThread.Post(fun () -> 
+                    Dispatcher.UIThread.Post(fun () ->
                         currentScanResults <- results
                         totalFreedTxt.Text <- sprintf "RECLAIMABLE: %s" (formatBytes bytes)
                         totalFilesTxt.Text <- sprintf "FILES: %d" files
@@ -712,37 +790,52 @@ type MainWindow() as this =
                 with ex -> writeToLog (sprintf "ANALYSIS ERROR: %s" ex.Message)
             ).Start()
         )
-        
-        executeBtn.Click.Add(fun _ -> 
+
+        executeBtn.Click.Add(fun _ ->
             let targets = selectedTargetsForCurrentCategory()
-            writeToLog (sprintf "--- CLEANING %d SELECTED RULE PATHS ---" targets.Length)
-            actionStatusTxt.Text <- "Cleaning selected items..."
-            Thread(fun () -> 
-                try
-                    scanEngine.CleanTargets(targets)
-                    scanEngine.SaveStatsToDatabase()
-                    let stats = scanEngine.GetStats()
-                    Dispatcher.UIThread.Post(fun () ->
-                        let freedSize = formatBytes stats.BytesFreed
-                        totalFreedTxt.Text <- sprintf "RECLAIMED: %s" freedSize
-                        totalFilesTxt.Text <- sprintf "FILES PURGED: %d" stats.FilesDeleted
-                        actionStatusTxt.Text <- sprintf "Cleaned %d files and reclaimed %s." stats.FilesDeleted freedSize
-                        reclaimVal.Text <- freedSize
-                        filesVal.Text <- string stats.FilesDeleted
-                        writeToLog (sprintf "CLEAN COMPLETE. Total reclaimed: %s" freedSize)
-                        healthVal.Text <- "CLEAN"
-                        healthVal.Foreground <- Brushes.LimeGreen
-                        healthCircle.Value <- 100
-                        healthValueTxt.Text <- "100%"
-                        currentScanResults <- scanEngine.AnalyzeTargets(targets)
-                        this.PopulateTargets()
-                    )
-                with ex -> writeToLog (sprintf "PURGE ERROR: %s" ex.Message)
-            ).Start()
+            if targets.IsEmpty then
+                actionStatusTxt.Text <- "Select at least one item to clean."
+            else
+                async {
+                    let! result =
+                        AlertDialog.ShowAsync(
+                            sprintf "This will permanently delete files from %d selected group(s). This cannot be undone." targets.Length,
+                            "Confirm Cleanup",
+                            DialogButton.YesNo,
+                            IconType.Warning) |> Async.AwaitTask
+                    if result = DialogResult.Yes then
+                        writeToLog (sprintf "--- CLEANING %d SELECTED RULE PATHS ---" targets.Length)
+                        actionStatusTxt.Text <- "Cleaning selected items..."
+                        Thread(fun () ->
+                            try
+                                scanEngine.CleanTargets(targets)
+                                scanEngine.SaveStatsToDatabase()
+                                let stats = scanEngine.GetStats()
+                                Dispatcher.UIThread.Post(fun () ->
+                                    let freedSize = formatBytes stats.BytesFreed
+                                    totalFreedTxt.Text <- sprintf "RECLAIMED: %s" freedSize
+                                    totalFilesTxt.Text <- sprintf "FILES PURGED: %d" stats.FilesDeleted
+                                    actionStatusTxt.Text <- sprintf "Cleaned %d files and reclaimed %s." stats.FilesDeleted freedSize
+                                    reclaimVal.Text <- freedSize
+                                    filesVal.Text <- string stats.FilesDeleted
+                                    writeToLog (sprintf "CLEAN COMPLETE. Total reclaimed: %s" freedSize)
+                                    healthVal.Text <- "CLEAN"
+                                    healthVal.Foreground <- success
+                                    healthCircle.Value <- 100
+                                    healthValueTxt.Text <- "100%"
+                                    currentScanResults <- scanEngine.AnalyzeTargets(targets)
+                                    this.PopulateTargets()
+                                )
+                            with ex -> writeToLog (sprintf "PURGE ERROR: %s" ex.Message)
+                        ).Start()
+                } |> Async.StartImmediate
         )
 
+        this.Content <- AlertDialogHost(Content = treeMenu)
+
         loadSystemInfo()
-        this.PopulateTargets(); showView "dash" None "DASHBOARD" dashboardView
+        this.PopulateTargets()
+        dashItem.IsSelected <- true
 
     member private this.PopulateTargets() =
         targetsList.Children.Clear()
@@ -774,8 +867,12 @@ type MainWindow() as this =
             groupedTargets |> List.filter (fun (key, _, _, _, _, _, _) -> selectedGroups.Contains(key)) |> List.length
         selectionTxt.Text <- sprintf "SELECTED: %d / %d" selectedVisible groupedTargets.Length
 
+        let cardBg = SolidColorBrush.Parse("#121212") :> IBrush
+        let textLow = Application.Current.FindResource("ThemeForegroundLowBrush") :?> IBrush
+        let primary = Application.Current.FindResource("PrimaryBrush") :?> IBrush
+
         for (key, t, pathCount, bytes, files, folders, exists) in groupedTargets do
-            let card = Border(Background = SolidColorBrush.Parse("#121212"), CornerRadius = CornerRadius(8.0), Margin = Thickness(0.0, 0.0, 0.0, 6.0), Padding = Thickness(14.0, 10.0))
+            let card = Border(Background = cardBg, CornerRadius = CornerRadius(8.0), Margin = Thickness(0.0, 0.0, 0.0, 6.0), Padding = Thickness(14.0, 10.0))
             let row = Grid(ColumnDefinitions = ColumnDefinitions("*,110,110"))
 
             let cb = CheckBox(IsChecked = Nullable<bool>(selectedGroups.Contains(key)), VerticalAlignment = VerticalAlignment.Center)
@@ -786,9 +883,13 @@ type MainWindow() as this =
                 let source = t.SourceFile.Replace(".json", "")
                 let status = if currentScanResults.IsEmpty then "Not analyzed" elif exists then "Found" else "Not found"
                 sprintf "%s | %s | %d rule paths" (CleanTargets.getCategoryName t.Category) status pathCount
-            nameStack.Children.Add(TextBlock(Text = detail, FontSize = 11.0, Foreground = Brushes.Gray))
+            let detailTxt = TextBlock(Text = detail, FontSize = 11.0)
+            detailTxt.Foreground <- textLow
+            nameStack.Children.Add(detailTxt)
             if not (String.IsNullOrEmpty(t.Description)) then
-                nameStack.Children.Add(TextBlock(Text = t.Description, FontSize = 10.0, Foreground = SolidColorBrush.Parse("#8a8a8a"), TextWrapping = TextWrapping.Wrap, MaxHeight = 34.0))
+                let descTxt = TextBlock(Text = t.Description, FontSize = 10.0, TextWrapping = TextWrapping.Wrap, MaxHeight = 34.0)
+                descTxt.Foreground <- textLow
+                nameStack.Children.Add(descTxt)
             cb.Content <- nameStack
             cb.IsCheckedChanged.Add(fun _ ->
                 match cb.IsChecked with
@@ -801,13 +902,14 @@ type MainWindow() as this =
             let sizeText =
                 if currentScanResults.IsEmpty then "Analyze"
                 else formatBytes bytes
-            let sizeBlock = TextBlock(Text = sizeText, Foreground = Brushes.DodgerBlue, FontWeight = FontWeight.Bold, FontSize = 13.0, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center)
+            let sizeBlock = TextBlock(Text = sizeText, Foreground = primary, FontWeight = FontWeight.Bold, FontSize = 13.0, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center)
             Grid.SetColumn(sizeBlock, 1); row.Children.Add(sizeBlock)
 
             let fileText =
                 if currentScanResults.IsEmpty then "-"
                 else sprintf "%d" files
-            let filesBlock = TextBlock(Text = fileText, Foreground = Brushes.Gray, FontSize = 13.0, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center)
+            let filesBlock = TextBlock(Text = fileText, FontSize = 13.0, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center)
+            filesBlock.Foreground <- textLow
             Grid.SetColumn(filesBlock, 2); row.Children.Add(filesBlock)
 
             card.Child <- row
@@ -815,11 +917,12 @@ type MainWindow() as this =
 
 type App() =
     inherit Application()
-    override this.Initialize() = 
-        this.Styles.Add(FluentTheme())
-        let gridStyle = Avalonia.Markup.Xaml.Styling.StyleInclude(baseUri = null)
-        gridStyle.Source <- Uri("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml")
-        this.Styles.Add(gridStyle)
+    override this.Initialize() =
+        // FluentTheme must load first: AvaloniaEdit's Fluent theme (and its SearchPanel)
+        // reads base tokens like ControlContentThemeFontSize straight from it and crashes
+        // without them. SynthoraTheme loads after, so its control themes still win.
+        this.Styles.Add(Avalonia.Themes.Fluent.FluentTheme())
+        this.Styles.Add(SynthoraTheme())
         let editStyle = Avalonia.Markup.Xaml.Styling.StyleInclude(baseUri = null)
         editStyle.Source <- Uri("avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml")
         this.Styles.Add(editStyle)

@@ -19,9 +19,13 @@ type BrowserUsageRow(target: BrowserCacheUsage) =
 type BrowserAnalysisView(writeToLog: string -> unit, openCleanup: unit -> unit) as this =
     inherit UserControl()
 
+    let brush (key: string) = Application.Current.FindResource(key) :?> IBrush
+    let textLow = brush "ThemeForegroundLowBrush"
+    let solidButtonTheme = Application.Current.FindResource("SolidButtonTheme") :?> Avalonia.Styling.ControlTheme
+
     let mutable activeScan: CancellationTokenSource option = None
     let mutable disposed = false
-    let analyzeButton = Button(Content = "Analyze browser caches", Padding = Thickness(18.0, 12.0))
+    let analyzeButton = Button(Content = "Analyze browser caches", Padding = Thickness(18.0, 12.0), Theme = solidButtonTheme)
     let cancelButton = Button(Content = "Cancel", IsEnabled = false, Padding = Thickness(18.0, 12.0))
     let status = TextBlock(Text = "Ready to analyze Chromium browser caches for this Windows account.", TextWrapping = TextWrapping.Wrap)
     let progress = ProgressBar(IsIndeterminate = true, IsVisible = false, Height = 3.0)
@@ -29,12 +33,13 @@ type BrowserAnalysisView(writeToLog: string -> unit, openCleanup: unit -> unit) 
                            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal)
 
     do
+        analyzeButton.Classes.Add("Primary")
         let layout = Grid(RowDefinitions = RowDefinitions("Auto,Auto,Auto,Auto,*"), Margin = Thickness(30.0))
         let heading = StackPanel(Spacing = 10.0, Margin = Thickness(0.0, 0.0, 0.0, 22.0))
         heading.Children.Add(TextBlock(Text = "Browser cache analysis", FontSize = 30.0, FontWeight = FontWeight.Bold))
         heading.Children.Add(TextBlock(
             Text = "Find cache folders for Chrome, Edge, Brave, Opera and other Chromium browsers. Sizes show current disk usage; this analysis does not delete files.",
-            Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap))
+            Foreground = textLow, TextWrapping = TextWrapping.Wrap))
         layout.Children.Add(heading)
 
         let actions = StackPanel(Orientation = Orientation.Horizontal, Spacing = 12.0, Margin = Thickness(0.0, 0.0, 0.0, 18.0))
