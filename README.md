@@ -1,4 +1,4 @@
-<img src="plumbyr/Assets/icon.png" width="64" height="64" alt="logo"/> <img src="plumbyr/Assets/GPL3.png" width="64" height="64" alt="GPL3"/>
+<img src="plumbyr/Assets/icon.png" width="128" height="128" alt="logo"/> <img src="plumbyr/Assets/GPL3.png" width="128" height="128" alt="GPL3"/> <a href="https://github.com/skonester/Plumbyr/blob/main/LICENSE">GitHub License</a>
 
 # P.L.U.M.B.Y.R
 
