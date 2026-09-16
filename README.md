@@ -1,16 +1,41 @@
+<img src="plumbyr/Assets/icon.png" width="64" height="64" alt="logo"/> <img src="plumbyr/Assets/gpl3.png" width="64" height="64" alt="GPL3"/>
+
 # P.L.U.M.B.Y.R
 
 **Plumbing Linked Universal Maintenance & Binary Yield Reclaimer**
 
 Plumbyr is a Windows cleaner and diagnostics app written in F# with Avalonia. It loads maintenance rules, analyzes files, shows size/count results, and lets you review selected cleanup targets.
 
-## Download / Run
+## System Overview
+Plumbyr is a Windows cleaner/diagnostics app (F# / Avalonia / .NET 10) that loads JSON maintenance rules, analyzes files, shows size/count results, and lets you review selected cleanup targets.
 
-The distributable is **dist/win-x64/Plumbyr.exe**: one self-contained Windows x64 executable. Copy that file to the destination computer and run it. No separate .NET or Node installation is needed. The existing application manifest requests administrator rights.
+## Key Features
+- Rule-based cleanup via embedded `win32rules/*.json`
+- Browser cache analysis via bundled `Kudu/worker.mjs` + pinned Node runtime
+- System diagnostics (`SystemInfo` via WMI/DXGI)
+- Command Center terminal with PowerShell/CMD execution
+- Cleaning history (`CleaningHistory` DB) and log export
 
-The EXE bundles .NET 10, Avalonia 12.0.2 UI libraries, System.Management, DXGI, Serilog, ByteSize, FSharp.Json, a pinned Node runtime (`node.exe`), the Kudu browser worker (`Kudu/worker.mjs`), embedded cleaning rules (`win32rules/*.json`), assets (`Assets/icon.png`), and license notices (`Kudu/vendor/LICENSE`, `NODE-LICENSE`). The `.fsproj` embeds these as `Plumbyr.Payload/*` resources; `Prepare-Node.ps1` downloads the pinned archive to `.build/node/win-x64` before build. On first launch, bundled files are materialized in a per-build cache under **%LOCALAPPDATA%/Plumbyr/runtime**. .NET also extracts native libraries to its standard temporary bundle cache. No sibling files need to be distributed with the EXE.
+## Tech Stack & Dependencies
+- F# / .NET 10 (`net10.0-windows`), Avalonia 12.1.2, Serilog, ByteSize, FSharp.Json
+- System.Management, Vortice.DXGI, Synthora
+- Bundled Node (`node.exe`) from pinned archive (`scripts/node-runtime.json`)
 
-Logs and cleaning history live under **%LOCALAPPDATA%/Plumbyr**, so the executable can run from a directory that is not writable.
+## Installation & Setup
+```powershell
+# Build (downloads pinned Node, restores NuGet)
+./scripts/Publish.ps1
+# Dev run
+dotnet run --project plumbyr/Plumbyr.fsproj
+```
+
+## Execution & Usage
+```powershell
+# Self-contained executable (no sibling files needed)
+./dist/win-x64/Plumbyr.exe
+# Browser analysis to JSON (no UI)
+./dist/win-x64/Plumbyr.exe --analyze-browsers report.json
+```
 
 ## Build
 
