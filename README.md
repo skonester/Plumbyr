@@ -4,8 +4,6 @@
 
 **Plumbing Linked Universal Maintenance & Binary Yield Reclaimer**
 
-Plumbyr is a Windows cleaner and diagnostics app written in F# with Avalonia. It loads maintenance rules, analyzes files, shows size/count results, and lets you review selected cleanup targets.
-
 ## System Overview
 Plumbyr is a Windows cleaner/diagnostics app (F# / Avalonia / .NET 10) that loads JSON maintenance rules, analyzes files, shows size/count results, and lets you review selected cleanup targets.
 
