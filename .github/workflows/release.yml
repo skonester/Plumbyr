@@ -1,0 +1,124 @@
+name: Release
+
+# Builds the portable single-file Plumbyr.exe and the Inno Setup installer,
+# smoke-tests the portable build, and publishes both to a GitHub release.
+#
+# Release by pushing a tag:   git tag v1.0.0 && git push origin v1.0.0
+# or run it manually from the Actions tab (enter the version, e.g. 1.0.0).
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (MAJOR.MINOR.PATCH)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION } else { $env:GITHUB_REF_NAME -replace '^v', '' }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Version '$version' is not MAJOR.MINOR.PATCH." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Releasing Plumbyr $version"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('plumbyr/Plumbyr.fsproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Cache pinned Node runtime
+        uses: actions/cache@v4
+        with:
+          path: .build/node
+          key: node-${{ hashFiles('scripts/node-runtime.json') }}
+
+      - name: Publish portable executable
+        run: ./scripts/Publish.ps1 -Version '${{ steps.version.outputs.version }}'
+
+      # Runners are elevated, so the requireAdministrator manifest doesn't block this.
+      - name: Smoke-test portable executable
+        run: ./tests/SingleFileSmoke.ps1
+
+      - name: Install Inno Setup
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw 'Inno Setup install failed.' }
+          }
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+          "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Build installer
+        run: |
+          & $env:ISCC /Qp "/DAppVersion=${{ steps.version.outputs.version }}" installer/Plumbyr.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
+
+      - name: Collect release assets
+        id: assets
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $out = 'dist/release'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item dist/win-x64/Plumbyr.exe "$out/Plumbyr-$version-portable.exe"
+          $setup = "$out/Plumbyr-$version-setup.exe"
+          if (-not (Test-Path $setup)) { throw "Missing installer: $setup" }
+          Get-ChildItem $out -Filter *.exe | Sort-Object Name | ForEach-Object {
+            '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name
+          } | Set-Content "$out/SHA256SUMS.txt" -Encoding ascii
+          Get-Content "$out/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Plumbyr-${{ steps.version.outputs.version }}
+          path: dist/release/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Plumbyr ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          make_latest: true
+          fail_on_unmatched_files: true
+          body: |
+            ## Downloads
+            - **Plumbyr-${{ steps.version.outputs.version }}-setup.exe** — installer (Program Files, Start menu, uninstaller)
+            - **Plumbyr-${{ steps.version.outputs.version }}-portable.exe** — single self-contained executable, no install needed
+
+            Windows 10/11 x64. Plumbyr requires administrator rights. Verify downloads against `SHA256SUMS.txt`.
+          files: |
+            dist/release/Plumbyr-${{ steps.version.outputs.version }}-setup.exe
+            dist/release/Plumbyr-${{ steps.version.outputs.version }}-portable.exe
+            dist/release/SHA256SUMS.txt

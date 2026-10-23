@@ -56,6 +56,7 @@ type NavKey =
     | NavCleaner of CleanCategory
     | NavBrowsers
     | NavDrivers
+    | NavOptimize
 
 type MainWindow() as this =
     inherit Window()
@@ -84,6 +85,7 @@ type MainWindow() as this =
     let APPS_SVG = "M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"
     let GAME_SVG = "M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"
     let DRIVER_SVG = "M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"
+    let OPTIMIZE_SVG = "M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"
 
     let mutable currentCategory: CleanCategory option = None
     let categoryTitle = TextBlock(FontSize = 28.0, FontWeight = FontWeight.Black)
@@ -407,6 +409,7 @@ type MainWindow() as this =
         this.Closed.Add(fun _ -> (browserAnalysis :> IDisposable).Dispose())
 
         let driversView = new DriversView(writeToLog, this.StorageProvider)
+        let optimizeView = new OptimizeView(writeToLog)
 
         // Navigation: a Synthora TreeMenu replaces the hand-rolled sidebar + view switcher.
         // Selecting an item both shows its Content and (via SelectionChanged below) triggers
@@ -418,6 +421,7 @@ type MainWindow() as this =
         let appsItem    = makeNavItem "Applications" APPS_SVG cleanerView (NavCleaner ApplicationCache)
         let gameItem    = makeNavItem "Gaming & GPU" GAME_SVG cleanerView (NavCleaner GamingCache)
         let driverItem  = makeNavItem "Drivers" DRIVER_SVG (driversView :> Control) NavDrivers
+        let optimizeItem = makeNavItem "Optimize" OPTIMIZE_SVG (optimizeView :> Control) NavOptimize
 
         let treeMenu = TreeMenu(Header = "PLUMBYR")
         treeMenu.PaneHeader <- header
@@ -428,6 +432,7 @@ type MainWindow() as this =
         treeMenu.Items.Add(appsItem) |> ignore
         treeMenu.Items.Add(gameItem) |> ignore
         treeMenu.Items.Add(driverItem) |> ignore
+        treeMenu.Items.Add(optimizeItem) |> ignore
 
         let runExportHistory () =
             async {
@@ -503,6 +508,10 @@ type MainWindow() as this =
                         currentCategory <- None
                         categoryTitle.Text <- "DRIVERS"
                         writeToLog "Switching to Drivers..."
+                    | NavOptimize ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "OPTIMIZE"
+                        writeToLog "Switching to Optimize..."
                 | _ -> ()
             | _ -> ())
 
@@ -583,6 +592,7 @@ type MainWindow() as this =
                 writeToLog ""
                 writeToLog "[PLUMBYR SHORTCUTS]"
                 writeToLog "  drivers            - Open Driver Management & Updates view"
+                writeToLog "  optimize           - Open Windows Optimization view"
                 writeToLog "  clean              - Open System Cleanup view"
                 writeToLog "  dashboard          - Return to System Overview dashboard"
                 writeToLog "  export             - Export terminal logs to a text file"
@@ -629,6 +639,9 @@ type MainWindow() as this =
                 if lower = "drivers" || lower = "driver" then
                     writeToLog "> drivers"
                     selectNav driverItem
+                elif lower = "optimize" || lower = "optimise" then
+                    writeToLog "> optimize"
+                    selectNav optimizeItem
                 elif lower = "clean" || lower = "cleanup" then
                     writeToLog "> clean"
                     selectNav sysItem

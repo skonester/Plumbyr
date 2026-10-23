@@ -6,6 +6,11 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <RootNamespace>WindowsCleaner</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>Plumbyr</Product>
+    <AssemblyTitle>Plumbyr</AssemblyTitle>
+    <Description>Plumbing Linked Universal Maintenance &amp; Binary Yield Reclaimer</Description>
+    <Copyright>Copyright (C) 2026 Plumbyr contributors</Copyright>
     <NodeRuntimeDir>$(MSBuildProjectDirectory)\..\.build\node\win-x64</NodeRuntimeDir>
   </PropertyGroup>
 
@@ -24,6 +29,8 @@
     <Compile Include="BrowserAnalysisView.fs" />
     <Compile Include="DriverService.fs" />
     <Compile Include="DriversView.fs" />
+    <Compile Include="OptimizeService.fs" />
+    <Compile Include="OptimizeView.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

@@ -1,6 +1,9 @@
+param([string]$Version = '')
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-dotnet publish (Join-Path $repoRoot 'plumbyr/Plumbyr.fsproj') -c Release -p:PublishProfile=SingleFile
+$publishArgs = @((Join-Path $repoRoot 'plumbyr/Plumbyr.fsproj'), '-c', 'Release', '-p:PublishProfile=SingleFile')
+if ($Version) { $publishArgs += "-p:Version=$Version" }
+dotnet publish @publishArgs
 if ($LASTEXITCODE -ne 0) { throw 'Plumbyr publish failed.' }
 $publishDir = Join-Path $repoRoot 'dist/win-x64'
 $files = @(Get-ChildItem -LiteralPath $publishDir -Force)
