@@ -61,7 +61,10 @@ jobs:
           path: .build/node
           key: node-${{ hashFiles('scripts/node-runtime.json') }}
 
+      # Windows PowerShell, like a local build: the project's Prepare-Node step runs
+      # powershell.exe, which misbehaves when it inherits pwsh's PSModulePath.
       - name: Publish portable executable
+        shell: powershell
         run: ./scripts/Publish.ps1 -Version '${{ steps.version.outputs.version }}'
 
       # Runners are elevated, so the requireAdministrator manifest doesn't block this.

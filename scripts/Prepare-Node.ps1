@@ -1,6 +1,14 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $repoRoot = Split-Path $PSScriptRoot -Parent
+# Hash via .NET rather than Get-FileHash: when this script is launched by powershell.exe
+# from a pwsh (PowerShell 7) session, the inherited PSModulePath can hide Get-FileHash.
+function Get-Sha256([string]$Path) {
+    $stream = [IO.File]::OpenRead($Path)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '') }
+    finally { $stream.Dispose(); $sha.Dispose() }
+}
 $pin = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'node-runtime.json') -Raw | ConvertFrom-Json
 $archiveName = "node-v$($pin.version)-$($pin.architecture)"
 $cacheRoot = Join-Path $repoRoot '.build/node'
@@ -11,7 +19,7 @@ if (-not (Test-Path -LiteralPath $archive)) {
     $download = "$archive.download"
     try {
         Invoke-WebRequest -UseBasicParsing -Uri "https://nodejs.org/dist/v$($pin.version)/$archiveName.zip" -OutFile $download
-        if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash -ne $pin.archiveSha256) {
+        if ((Get-Sha256 $download) -ne $pin.archiveSha256) {
             throw 'Downloaded Node archive does not match the pinned SHA-256 checksum.'
         }
         Move-Item -LiteralPath $download -Destination $archive -Force
@@ -19,7 +27,7 @@ if (-not (Test-Path -LiteralPath $archive)) {
         if (Test-Path -LiteralPath $download) { Remove-Item -LiteralPath $download -Force }
     }
 }
-if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $pin.archiveSha256) {
+if ((Get-Sha256 $archive) -ne $pin.archiveSha256) {
     throw "Cached Node archive has an invalid checksum: $archive"
 }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -34,13 +42,13 @@ try {
         $sha = [Security.Cryptography.SHA256]::Create()
         try { $expected = [BitConverter]::ToString($sha.ComputeHash($inputStream)).Replace('-', '') }
         finally { $inputStream.Dispose(); $sha.Dispose() }
-        if ((Test-Path -LiteralPath $destination) -and (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $expected) { continue }
+        if ((Test-Path -LiteralPath $destination) -and (Get-Sha256 $destination) -eq $expected) { continue }
         $inputStream = $entry.Open()
         $outputStream = [IO.File]::Create($destination)
         try { $inputStream.CopyTo($outputStream) }
         finally { $outputStream.Dispose(); $inputStream.Dispose() }
     }
 } finally { $zip.Dispose() }
-if ((Get-FileHash -LiteralPath (Join-Path $runtimeRoot 'node.exe') -Algorithm SHA256).Hash -ne $pin.executableSha256) {
+if ((Get-Sha256 (Join-Path $runtimeRoot 'node.exe')) -ne $pin.executableSha256) {
     throw 'Extracted Node executable does not match the pinned SHA-256 checksum.'
 }
