@@ -24,3 +24,4 @@ module CleanTargets =
         | ApplicationCache -> "Applications"
         | UserTemporary -> "User Data"
         | UpdateCache -> "Updates"
+        | PrivacyData -> "Privacy Data"

@@ -125,6 +125,7 @@ type ScanEngine() =
                 onFileProcessed.Trigger(sprintf "SKIP (PROTECTED): %s" target.Name)
             else
                 for resolvedPath in expandWildcardPath path do
+                    let before = stats
                     if Directory.Exists(resolvedPath) then
                         Log.Information("[{Source}] PURGING: {Name}", target.SourceFile, target.Name)
                         onFileProcessed.Trigger(sprintf "[%s] PURGING: %s" target.SourceFile target.Name)
@@ -134,10 +135,22 @@ type ScanEngine() =
                                 Directory.Delete(resolvedPath, false)
                                 stats <- { stats with FoldersDeleted = stats.FoldersDeleted + 1 }
                             with _ -> ()
+                        this.LogPurgeSummary(target, before)
                     elif File.Exists(resolvedPath) then
                         Log.Information("[{Source}] PURGING: {Name}", target.SourceFile, target.Name)
                         onFileProcessed.Trigger(sprintf "[%s] PURGING: %s" target.SourceFile target.Name)
                         this.CleanFile(resolvedPath)
+                        this.LogPurgeSummary(target, before)
+
+    // Per-file lines are Debug-only (file log); the terminal gets one summary per rule path.
+    member private this.LogPurgeSummary(target: CleanTarget, before: CleanStats) =
+        Log.Information(
+            "[{Source}] PURGED: {Name} ({Files} files, {Size}, {Locked} locked)",
+            target.SourceFile,
+            target.Name,
+            stats.FilesDeleted - before.FilesDeleted,
+            ByteSizeLib.ByteSize.FromBytes(float (stats.BytesFreed - before.BytesFreed)).ToString(),
+            stats.Warnings - before.Warnings)
 
     member private this.CleanDirectory(dirPath: string, recursive: bool) =
         try
@@ -174,7 +187,7 @@ type ScanEngine() =
                         BytesFreed = stats.BytesFreed + size
                         FilesDeleted = stats.FilesDeleted + 1 }
         with ex ->
-            Log.Warning("SKIP (LOCKED): {File}", Path.GetFileName(filePath))
+            Log.Debug("SKIP (LOCKED): {Path}", filePath)
             onFileProcessed.Trigger(sprintf "SKIP (LOCKED): %s" (Path.GetFileName(filePath)))
             stats <- { stats with Warnings = stats.Warnings + 1 }
 

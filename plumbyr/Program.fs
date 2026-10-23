@@ -44,7 +44,8 @@ module AppLogging =
 
         let config =
             match uiLog with
-            | Some writer -> config.WriteTo.Sink(TerminalSink(writer))
+            // Debug carries per-file noise (thousands of lines per purge) - file log only.
+            | Some writer -> config.WriteTo.Sink(TerminalSink(writer), restrictedToMinimumLevel = LogEventLevel.Information)
             | None -> config
 
         Log.Logger <- config.CreateLogger()
@@ -83,7 +84,8 @@ type MainWindow() as this =
     let SYS_SVG = "M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"
     let BROWSER_SVG = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
     let APPS_SVG = "M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"
-    let GAME_SVG = "M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"
+    let PRIVACY_SVG = "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
+    let GAME_SVG ="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"
     let DRIVER_SVG = "M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"
     let OPTIMIZE_SVG = "M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"
 
@@ -380,8 +382,8 @@ type MainWindow() as this =
                 with _ -> ()
             )
 
-        scanEngine.OnFileProcessed.Add(writeToLog)
-
+        // ScanEngine logs everything it reports via OnFileProcessed through Serilog too, so the
+        // terminal is fed by the TerminalSink alone; subscribing writeToLog here would double it.
         AppLogging.configure (Some writeToLog)
 
         Log.Information("Plumbyr Started")
@@ -389,16 +391,20 @@ type MainWindow() as this =
         writeToLog "Plumbyr Power-User Terminal ready. CMD & PowerShell enabled."
         writeToLog "Type 'help' for available commands or use the quick actions above."
 
-        // Real-time Stats during Purge
+        // Real-time Stats during Purge. Fires once per file, so refreshes are capped at ~10/s;
+        // posting every one floods the dispatcher and freezes the window on large purges.
+        let statsRefresh = Stopwatch.StartNew()
         scanEngine.OnFileProcessed.Add(fun _ ->
-            Dispatcher.UIThread.Post(fun () ->
-                let s = scanEngine.GetStats()
-                let freedSize = ByteSize.FromBytes(float s.BytesFreed)
-                reclaimVal.Text <- sprintf "%s" (freedSize.ToString())
-                filesVal.Text <- string s.FilesDeleted
-                totalFreedTxt.Text <- sprintf "RECLAIMED: %s" (freedSize.ToString())
-                totalFilesTxt.Text <- sprintf "FILES PURGED: %d" s.FilesDeleted
-            )
+            if statsRefresh.ElapsedMilliseconds >= 100L then
+                statsRefresh.Restart()
+                Dispatcher.UIThread.Post(fun () ->
+                    let s = scanEngine.GetStats()
+                    let freedSize = ByteSize.FromBytes(float s.BytesFreed)
+                    reclaimVal.Text <- sprintf "%s" (freedSize.ToString())
+                    filesVal.Text <- string s.FilesDeleted
+                    totalFreedTxt.Text <- sprintf "RECLAIMED: %s" (freedSize.ToString())
+                    totalFilesTxt.Text <- sprintf "FILES PURGED: %d" s.FilesDeleted
+                )
         )
 
         // BrowserAnalysisView's "Open cleanup rules" button needs to jump into the cleaner
@@ -419,6 +425,7 @@ type MainWindow() as this =
         let sysItem     = makeNavItem "System Cleanup" SYS_SVG cleanerView (NavCleaner SystemTemporary)
         let browserItem = makeNavItem "Browsers" BROWSER_SVG (browserAnalysis :> Control) NavBrowsers
         let appsItem    = makeNavItem "Applications" APPS_SVG cleanerView (NavCleaner ApplicationCache)
+        let privacyItem = makeNavItem "Privacy Data" PRIVACY_SVG cleanerView (NavCleaner PrivacyData)
         let gameItem    = makeNavItem "Gaming & GPU" GAME_SVG cleanerView (NavCleaner GamingCache)
         let driverItem  = makeNavItem "Drivers" DRIVER_SVG (driversView :> Control) NavDrivers
         let optimizeItem = makeNavItem "Optimize" OPTIMIZE_SVG (optimizeView :> Control) NavOptimize
@@ -430,6 +437,7 @@ type MainWindow() as this =
         treeMenu.Items.Add(sysItem) |> ignore
         treeMenu.Items.Add(browserItem) |> ignore
         treeMenu.Items.Add(appsItem) |> ignore
+        treeMenu.Items.Add(privacyItem) |> ignore
         treeMenu.Items.Add(gameItem) |> ignore
         treeMenu.Items.Add(driverItem) |> ignore
         treeMenu.Items.Add(optimizeItem) |> ignore
@@ -479,6 +487,7 @@ type MainWindow() as this =
             | ApplicationCache -> "APP CLEANUP"
             | GamingCache -> "GAMING & GPU"
             | BrowserCache -> "BROWSER CLEANUP"
+            | PrivacyData -> "PRIVACY DATA"
             | _ -> "SYSTEM CLEANUP"
 
         treeMenu.SelectionChanged.Add(fun _ ->
@@ -731,7 +740,8 @@ type MainWindow() as this =
         let loadSystemInfo () =
             try
                 let info = SystemInfo.getFullReport()
-                Dispatcher.UIThread.Invoke(fun () ->
+                // Post, not Invoke: a busy UI thread must not park timer threads.
+                Dispatcher.UIThread.Post(fun () ->
                     osVal.Text <- info.OS
                     cpuVal.Text <- info.Processor
                     ramVal.Text <- info.Memory
@@ -742,10 +752,13 @@ type MainWindow() as this =
                 )
             with _ -> ()
 
-        // Real-time Hardware Monitor Timer
+        // Real-time Hardware Monitor Timer. The WMI queries can outlast the interval, so the
+        // timer re-arms only after each refresh finishes instead of overlapping runs.
         let statsTimer = new System.Timers.Timer(2000.0)
-        statsTimer.Elapsed.Add(fun _ -> loadSystemInfo())
-        statsTimer.AutoReset <- true
+        statsTimer.Elapsed.Add(fun _ ->
+            loadSystemInfo()
+            statsTimer.Start())
+        statsTimer.AutoReset <- false
         statsTimer.Enabled <- true
         loadSystemInfo()
 
@@ -824,6 +837,8 @@ type MainWindow() as this =
                                 scanEngine.CleanTargets(targets)
                                 scanEngine.SaveStatsToDatabase()
                                 let stats = scanEngine.GetStats()
+                                // Rescan here on the worker; it walks every rule path again.
+                                let rescanned = scanEngine.AnalyzeTargets(targets)
                                 Dispatcher.UIThread.Post(fun () ->
                                     let freedSize = formatBytes stats.BytesFreed
                                     totalFreedTxt.Text <- sprintf "RECLAIMED: %s" freedSize
@@ -836,7 +851,7 @@ type MainWindow() as this =
                                     healthVal.Foreground <- success
                                     healthCircle.Value <- 100
                                     healthValueTxt.Text <- "100%"
-                                    currentScanResults <- scanEngine.AnalyzeTargets(targets)
+                                    currentScanResults <- rescanned
                                     this.PopulateTargets()
                                 )
                             with ex -> writeToLog (sprintf "PURGE ERROR: %s" ex.Message)
@@ -854,9 +869,11 @@ type MainWindow() as this =
         targetsList.Children.Clear()
         let targets = targetsForCurrentCategory()
 
+        // Privacy data (cookies, history, app state DBs) signs users out, so it's opt-in only.
         if selectedGroups.Count = 0 then
             for target in targets do
-                selectedGroups.Add(groupKey target) |> ignore
+                if target.Category <> PrivacyData then
+                    selectedGroups.Add(groupKey target) |> ignore
 
         let resultLookup =
             currentScanResults

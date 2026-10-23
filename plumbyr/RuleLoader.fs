@@ -42,7 +42,7 @@ module RuleLoader =
         | "gaming" -> GamingCache
         | "gpu-cache" -> GamingCache
         | "steam" -> GamingCache
-        | "databases" -> ApplicationCache
+        | "databases" -> PrivacyData
         | "misc" -> UserTemporary
         | _ -> ApplicationCache
 

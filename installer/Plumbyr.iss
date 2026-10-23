@@ -3,7 +3,7 @@
 ; Build: ISCC.exe /DAppVersion=1.0.0 installer\Plumbyr.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 
 #define AppName "Plumbyr"

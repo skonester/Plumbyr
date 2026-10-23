@@ -18,6 +18,7 @@ type CleanCategory =
     | ApplicationCache
     | UserTemporary
     | UpdateCache
+    | PrivacyData
 
 type CleanStats = {
     mutable BytesFreed: uint64
