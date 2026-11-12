@@ -1,9 +1,9 @@
 ; Inno Setup script for the Plumbyr installer.
 ; Wraps the single-file dist\win-x64\Plumbyr.exe produced by scripts\Publish.ps1.
-; Build: ISCC.exe /DAppVersion=1.0.0 installer\Plumbyr.iss
+; Build: ISCC.exe /DAppVersion=1.0.2 installer\Plumbyr.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #define AppVersion "1.0.2"
 #endif
 
 #define AppName "Plumbyr"

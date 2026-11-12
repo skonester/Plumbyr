@@ -38,6 +38,12 @@ try {
     if ([IO.File]::ReadAllText($sample) -ne 'abc') { throw 'Analysis changed the fixture.' }
     $looseRuntime = Get-ChildItem -LiteralPath $fixture -File | Where-Object { $_.Extension -in @('.dll', '.ts', '.mjs') -or $_.Name -eq 'node.exe' }
     if ($looseRuntime) { throw 'The application required runtime files beside the executable.' }
+    $sleepScripts = @(Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA 'Plumbyr/runtime') -Directory | ForEach-Object { Join-Path $_.FullName 'Goodnight' })
+    if ($sleepScripts.Count -ne 1) { throw 'Expected one extracted Goodnight payload.' }
+    foreach ($name in @('SleepDebug.ps1', 'SystemHealth.ps1', 'SleepRecovery.ps1', 'QuickOff-LICENSE.txt')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $sleepScripts[0] $name))) { throw "Missing embedded sleep payload: $name" }
+    }
+    & (Join-Path $PSScriptRoot 'GoodnightScriptsSmoke.ps1') -ScriptsDirectory $sleepScripts[0]
     Write-Host 'PASS: isolated Plumbyr.exe analyzed 1 cache / 1 file / 3 bytes with empty PATH and .NET lookup disabled.'
     Write-Host 'PASS: bundled resources and Node work without shipping sibling files; analysis left the fixture unchanged.'
 } finally {

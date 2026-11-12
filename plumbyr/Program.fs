@@ -56,8 +56,10 @@ type NavKey =
     | NavTerminal
     | NavCleaner of CleanCategory
     | NavBrowsers
+    | NavSpaceMap
     | NavDrivers
     | NavOptimize
+    | NavSleep
 
 type MainWindow() as this =
     inherit Window()
@@ -413,14 +415,27 @@ type MainWindow() as this =
         let mutable openCleanupFromBrowsers : unit -> unit = fun () -> ()
         let browserAnalysis = new BrowserAnalysisView(writeToLog, fun () -> openCleanupFromBrowsers())
         this.Closed.Add(fun _ -> (browserAnalysis :> IDisposable).Dispose())
+        let spaceMapView = new SpaceMapView(writeToLog, this.StorageProvider)
+        this.Closed.Add(fun _ -> (spaceMapView :> IDisposable).Dispose())
 
         let driversView = new DriversView(writeToLog, this.StorageProvider)
         let optimizeView = new OptimizeView(writeToLog)
+        let sleepPlatform = SleepPlatform.WindowsSleepPlatform(writeToLog) :> ISleepPlatform
+        let sleepController = new SleepController(sleepPlatform, writeToLog)
+        let sleepView = new SleepView(sleepController, writeToLog, Path.Combine(AppFiles.dataDirectory(), "sleep-settings.json"))
+        this.Closed.Add(fun _ -> (sleepView :> IDisposable).Dispose())
+        async {
+            try
+                let! enabled = SleepPlatform.startupEnabled() |> Async.AwaitTask
+                sleepView.SetStartupState(enabled)
+            with ex -> writeToLog ("Could not query sleep sign-in preference: " + ex.Message)
+        } |> Async.StartImmediate
 
         // Navigation: a Synthora TreeMenu replaces the hand-rolled sidebar + view switcher.
         // Selecting an item both shows its Content and (via SelectionChanged below) triggers
         // the equivalent side effects the old button-click handlers used to run.
         let dashItem    = makeNavItem "Dashboard" DASH_SVG dashboardView NavDashboard
+        let spaceMapItem = makeNavItem "Space map" APPS_SVG (spaceMapView :> Control) NavSpaceMap
         let termItem    = makeNavItem "Command Center" TERM_SVG terminalView NavTerminal
         let sysItem     = makeNavItem "System Cleanup" SYS_SVG cleanerView (NavCleaner SystemTemporary)
         let browserItem = makeNavItem "Browsers" BROWSER_SVG (browserAnalysis :> Control) NavBrowsers
@@ -429,10 +444,12 @@ type MainWindow() as this =
         let gameItem    = makeNavItem "Gaming & GPU" GAME_SVG cleanerView (NavCleaner GamingCache)
         let driverItem  = makeNavItem "Drivers" DRIVER_SVG (driversView :> Control) NavDrivers
         let optimizeItem = makeNavItem "Optimize" OPTIMIZE_SVG (optimizeView :> Control) NavOptimize
+        let sleepItem = makeNavItem "Sleep" HIST_SVG (sleepView :> Control) NavSleep
 
         let treeMenu = TreeMenu(Header = "PLUMBYR")
         treeMenu.PaneHeader <- header
         treeMenu.Items.Add(dashItem) |> ignore
+        treeMenu.Items.Add(spaceMapItem) |> ignore
         treeMenu.Items.Add(termItem) |> ignore
         treeMenu.Items.Add(sysItem) |> ignore
         treeMenu.Items.Add(browserItem) |> ignore
@@ -441,6 +458,9 @@ type MainWindow() as this =
         treeMenu.Items.Add(gameItem) |> ignore
         treeMenu.Items.Add(driverItem) |> ignore
         treeMenu.Items.Add(optimizeItem) |> ignore
+        treeMenu.Items.Add(sleepItem) |> ignore
+        let sleepCloseSubscription = SleepWindowLifetime.attach this sleepController (fun () -> treeMenu.SelectedItem <- sleepItem) writeToLog
+        this.Closed.Add(fun _ -> sleepCloseSubscription.Dispose())
 
         let runExportHistory () =
             async {
@@ -473,7 +493,18 @@ type MainWindow() as this =
         // Export History lives in the pane footer since it's an action, not a page.
         let exportBtn = Button(Theme = borderlessButtonTheme, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left, Margin = Thickness(15.0, 6.0, 15.0, 15.0))
         exportBtn.Content <- makeNavHeader "Export History" HIST_SVG
-        treeMenu.PaneFooter <- exportBtn
+        let paneFooter = StackPanel(Spacing = 6.0)
+        let sleepCountdownText = TextBlock(TextWrapping = TextWrapping.Wrap, Margin = Thickness(15.0, 0.0), IsVisible = false)
+        let cancelSleep = Button(Content = "Cancel sleep", Margin = Thickness(15.0, 0.0), IsVisible = false)
+        cancelSleep.Click.Add(fun _ -> sleepController.CancelSleep() |> ignore)
+        let sleepBannerSubscription = sleepController.Changed.Subscribe(fun state ->
+            Dispatcher.UIThread.Post(fun () ->
+                sleepCountdownText.IsVisible <- state.Countdown.IsSome
+                cancelSleep.IsVisible <- state.Countdown.IsSome
+                sleepCountdownText.Text <- state.Countdown |> Option.map (sprintf "QuickOff sleep in %d seconds") |> Option.defaultValue ""))
+        this.Closed.Add(fun _ -> sleepBannerSubscription.Dispose())
+        paneFooter.Children.AddRange [sleepCountdownText; cancelSleep; exportBtn]
+        treeMenu.PaneFooter <- paneFooter
         exportBtn.Click.Add(fun _ -> writeToLog "> export"; runExportHistory())
 
         openCleanupFromBrowsers <- fun () ->
@@ -513,6 +544,10 @@ type MainWindow() as this =
                         currentCategory <- None
                         categoryTitle.Text <- "BROWSER ANALYSIS"
                         writeToLog "Switching to Browser Analysis..."
+                    | NavSpaceMap ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "SPACE MAP"
+                        writeToLog "Switching to Space Map..."
                     | NavDrivers ->
                         currentCategory <- None
                         categoryTitle.Text <- "DRIVERS"
@@ -521,6 +556,10 @@ type MainWindow() as this =
                         currentCategory <- None
                         categoryTitle.Text <- "OPTIMIZE"
                         writeToLog "Switching to Optimize..."
+                    | NavSleep ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "SLEEP"
+                        writeToLog "Switching to Sleep..."
                 | _ -> ()
             | _ -> ())
 
@@ -570,6 +609,7 @@ type MainWindow() as this =
                 writeToLog "                      HARDWARE & STORAGE POWER TOOLS                  "
                 writeToLog "======================================================================"
                 writeToLog "  battery            - Generate detailed battery health report (HTML)"
+                writeToLog "  sleep / goodnight  - Open sleep monitoring, QuickOff and diagnostics"
                 writeToLog "  trim               - Send TRIM command to SSD (defrag C: /O)"
                 writeToLog "  hibernation-off    - Disable hibernation & delete hiberfil.sys (frees GBs)"
                 writeToLog "  hibernation-on     - Re-enable hibernation"
@@ -660,6 +700,9 @@ type MainWindow() as this =
                 elif lower = "browsers" || lower = "browser" then
                     writeToLog "> browsers"
                     selectNav browserItem
+                elif lower = "sleep" || lower = "goodnight" then
+                    writeToLog "> sleep"
+                    selectNav sleepItem
                 elif lower = "export" then
                     writeToLog "> export"
                     runExportHistory()
@@ -864,6 +907,9 @@ type MainWindow() as this =
         loadSystemInfo()
         this.PopulateTargets()
         dashItem.IsSelected <- true
+        if Environment.GetCommandLineArgs() |> Array.contains "--sleep-monitor" then
+            selectNav sleepItem
+            sleepController.Start() |> ignore
 
     member private this.PopulateTargets() =
         targetsList.Children.Clear()

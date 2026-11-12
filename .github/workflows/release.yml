@@ -3,8 +3,8 @@ name: Release
 # Builds the portable single-file Plumbyr.exe and the Inno Setup installer,
 # smoke-tests the portable build, and publishes both to a GitHub release.
 #
-# Release by pushing a tag:   git tag v1.0.0 && git push origin v1.0.0
-# or run it manually from the Actions tab (enter the version, e.g. 1.0.0).
+# Release by pushing a tag:   git tag v1.0.2 && git push origin v1.0.2
+# or run it manually from the Actions tab (enter the version, e.g. 1.0.2).
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
       version:
         description: 'Release version (MAJOR.MINOR.PATCH)'
         required: true
-        default: '1.0.1'
+        default: '1.0.2'
 
 permissions:
   contents: write
@@ -68,6 +68,9 @@ jobs:
         run: ./scripts/Publish.ps1 -Version '${{ steps.version.outputs.version }}'
 
       # Runners are elevated, so the requireAdministrator manifest doesn't block this.
+      - name: Verify sleep controls without power actions
+        run: dotnet run --project tests/SleepSmoke/SleepSmoke.fsproj -c Release
+
       - name: Smoke-test portable executable
         run: ./tests/SingleFileSmoke.ps1
 
