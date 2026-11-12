@@ -31,7 +31,7 @@ jobs:
         shell: pwsh
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Resolve version
         id: version
@@ -44,19 +44,19 @@ jobs:
           "tag=v$version" >> $env:GITHUB_OUTPUT
           Write-Host "Releasing Plumbyr $version"
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('plumbyr/Plumbyr.fsproj') }}
           restore-keys: nuget-${{ runner.os }}-
 
       - name: Cache pinned Node runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .build/node
           key: node-${{ hashFiles('scripts/node-runtime.json') }}
@@ -67,10 +67,11 @@ jobs:
         shell: powershell
         run: ./scripts/Publish.ps1 -Version '${{ steps.version.outputs.version }}'
 
-      # Runners are elevated, so the requireAdministrator manifest doesn't block this.
       - name: Verify sleep controls without power actions
+        shell: powershell
         run: dotnet run --project tests/SleepSmoke/SleepSmoke.fsproj -c Release
 
+      # Runners are elevated, so the requireAdministrator manifest doesn't block this.
       - name: Smoke-test portable executable
         run: ./tests/SingleFileSmoke.ps1
 
@@ -103,14 +104,14 @@ jobs:
           } | Set-Content "$out/SHA256SUMS.txt" -Encoding ascii
           Get-Content "$out/SHA256SUMS.txt"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: Plumbyr-${{ steps.version.outputs.version }}
           path: dist/release/*
           if-no-files-found: error
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}

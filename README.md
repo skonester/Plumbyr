@@ -106,7 +106,7 @@ dotnet run --project tests/SleepSmoke/SleepSmoke.fsproj -c Release
 ./tests/GoodnightScriptsSmoke.ps1
 ~~~
 
-The smoke checks cover countdown timing/cancellation, launch failure, tool exclusion, pause/close cleanup, wake-source policy, lid-open cancellation, saved settings, all five themed pages at two widths, native read-only listener registration, embedded helper syntax, and Check/Repair command plans. Rendered previews are written to `.build/sleep-*.png`. The standalone-executable check also verifies the embedded Goodnight helpers.
+The sleep smoke check covers countdown timing/cancellation, launch failure, tool exclusion, pause/close cleanup, wake-source policy, lid-open cancellation, saved settings, all five themed pages at two widths, and native read-only listener registration. It resolves embedded Goodnight helpers through `AppFiles.get`, compares their contents with source, and checks their syntax, Check/Repair command plans, and empty-journal recovery. Rendered previews are written to `.build/sleep-*.png`.
 
 Verify the space map scanner with isolated fixtures:
 
@@ -136,7 +136,7 @@ From an administrator PowerShell (the app manifest requires elevation):
 ./tests/SingleFileSmoke.ps1
 ~~~
 
-This copies only the EXE to a fresh fixture directory, clears PATH, disables external .NET lookup, verifies browser analysis, and removes its own fixture files.
+This copies only the EXE to a fresh fixture directory, clears PATH, disables external .NET lookup, verifies browser analysis, and removes its own fixture files. Browser fixture paths follow the child's `LOCALAPPDATA` environment variable; the application's extracted payload uses Windows' LocalApplicationData known folder, which may differ.
 
 ## Repository Layout
 

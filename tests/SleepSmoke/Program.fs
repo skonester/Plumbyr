@@ -270,6 +270,26 @@ let testProcessCancellation () =
                 child.WaitForExit(5000) |> ignore
     printfn "PASS: real collector cancellation stops parent/child, pre-cancellation starts nothing, exit/output are preserved, and inherited pipes cannot hang completion."
 
+let testBundledSleepHelpers () =
+    let repoRoot = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, "../.."))
+    let names = [ "SleepDebug.ps1"; "SystemHealth.ps1"; "SleepRecovery.ps1"; "QuickOff-LICENSE.txt" ]
+    // Resolve the compiled application's own payload. Windows' known-folder path
+    // need not follow LOCALAPPDATA, and other builds may already be extracted.
+    let paths = names |> List.map (fun name ->
+        let path = AppFiles.get ("Goodnight/" + name)
+        let source = Path.Combine(repoRoot, "plumbyr", "Goodnight", name)
+        check (File.Exists(path)) ("Missing embedded sleep payload: " + name)
+        check (File.ReadAllBytes(path) = File.ReadAllBytes(source)) ("Embedded sleep payload differs from source: " + name)
+        path)
+    let powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell/v1.0/powershell.exe")
+    use timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30.0))
+    let work = SleepPlatform.runProcessWithCancellation powershell
+                    [ "-NoProfile"; "-NonInteractive"; "-ExecutionPolicy"; "Bypass"; "-File"
+                      Path.Combine(repoRoot, "tests", "GoodnightScriptsSmoke.ps1")
+                      "-ScriptsDirectory"; Path.GetDirectoryName(paths.Head) ] (printfn "%s") timeout.Token
+    check (work.GetAwaiter().GetResult() = 0) "Bundled sleep helper checks failed"
+    printfn "PASS: AppFiles resolves the embedded sleep helpers; contents and safe command-plan/recovery checks pass."
+
 let runFixture mode =
     match mode with
     | "--fixture-exit" ->
@@ -291,6 +311,7 @@ let runTests () =
     testDiagnosticClose()
     testController()
     testEvents()
+    testBundledSleepHelpers()
     let fixture = Path.Combine(Path.GetTempPath(), "Plumbyr-sleep-" + Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory(fixture) |> ignore
     let settingsPath = Path.Combine(fixture, "settings.json")
