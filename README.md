@@ -18,6 +18,7 @@ Reclaim disk space, find storage hogs, and troubleshoot your PC from one app. Pr
 
 - **Clean with a clear picture.** Analyze temporary files and application, browser, and gaming caches. Review file counts and sizes before cleaning selected items.
 - **Find where your storage went.** Explore drives and folders in Space map, drill into the largest folders, and reveal any of the 40 biggest files in Explorer.
+- **Recover deleted files.** Choose a drive or disk image in Sources, review found files and picture previews, then recover selected files to another drive.
 - **Investigate Windows and sleep problems.** Collect hardware and power reports, inspect wake sources, and run separate Windows health checks or repairs. Sleep controls include monitoring and a cancelable QuickOff countdown.
 - **Keep maintenance tools together.** Inspect installed drivers, check Windows Update for driver updates, back up drivers, and use Command Center for diagnostics and commands.
 - **Choose your Windows tweaks.** Apply selected privacy, background-app, advertising, and gaming settings, with an option to create a restore point first.

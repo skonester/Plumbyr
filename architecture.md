@@ -6,7 +6,7 @@ Plumbyr is a Windows cleaner and diagnostics application built with F# and Avalo
 
 ## Build and run
 
-Building requires Windows x64, the .NET 10 SDK, and Windows PowerShell. The first build restores NuGet packages and downloads a checksum-pinned Node archive from nodejs.org. Later builds reuse the local caches. A separate Node/npm installation is unnecessary.
+Building requires Windows x64, the .NET 10 SDK, Windows PowerShell, Rust 1.94 or later, and Visual C++ build tools. The first build restores NuGet/Cargo packages and downloads a checksum-pinned Node archive from nodejs.org. Later builds reuse the local caches. A separate Node/npm installation is unnecessary. Rust builds the bundled recovery engine; published apps require no Rust installation.
 
 From the repository root:
 
@@ -40,6 +40,7 @@ The desktop shell uses Avalonia with Synthora controls. The project targets `net
 | `KuduBridge`, `BrowserAnalysisView` | Run the bundled Node worker and display Chromium cache measurements. |
 | `SystemInfo` | Read Windows and hardware diagnostics through WMI and DXGI. |
 | `SpaceScanner`, `SpaceMapView` | Build and display a read-only folder-size tree and bounded top-40 file list. |
+| `RecoveryService`, `RecoveryView`, `Reclaim/` | Native F# source selection and recovered-file pages, with a bundled Reclaim recovery worker. |
 | `DriverService`, `DriversView` | Inspect drivers, use Windows Update, export backups, install local INF packages, and request restore points. |
 | `OptimizeService`, `OptimizeView` | Present and apply selected Windows settings and debloat actions. |
 | `SleepController`, `SleepPlatform`, `SleepView` | Manage monitoring, countdowns, Windows power integration, diagnostic tools, and sleep settings. |
@@ -69,6 +70,7 @@ Writable application data stays outside the extracted payload:
 plumbyr/             F# application, assets, and publish profile
 plumbyr/Kudu/        Node worker and retained Kudu source
 plumbyr/Goodnight/   Bundled sleep/health/recovery helpers and QuickOff notice
+plumbyr/Reclaim/     Retained MIT recovery engine, Windows worker, and fixtures
 win32rules/          Embedded JSON cleaning rules
 scripts/            Publish script and checksum-pinned Node preparation
 installer/          Inno Setup installer definition
@@ -100,6 +102,16 @@ The Node version, architecture, and official archive/executable checksums are pi
 Choose a drive and select **Scan**, or use **Choose folder** to map a location. Browse size-sorted folders through size bars, breadcrumbs, and **Up**; reveal folders or any of the 40 biggest files in Explorer.
 
 `SpaceScanner` uses an iterative, cancellable walk. Sizes are logical file bytes, junctions/symbolic links are skipped, and unreadable entries are reported. The feature never deletes files. `SpaceMapView` runs scanning in the background with progress and cancellation. Closing the window cancels its scan.
+
+### Sources and recovered files
+
+**Sources** lists local volumes and available physical disks, with read-only refresh and an option to open a disk image. Locked/inaccessible volumes are disabled. The default scans unused space in NTFS, FAT, exFAT, ext2/3/4, and HFS+ volumes. Unsupported or damaged allocation maps fail without falling back to occupied data. Choose **All bytes** explicitly for signature carving, including existing files; use a volume for unused-space scanning rather than an unpartitioned whole disk.
+
+**Recovered files** updates during scanning. Search names, types, and decimal/hex offsets; filter by category; sort by discovery, name, or size; and inspect details and decoded picture previews. Incoming events are batched every 100 ms with a bounded UI processing budget. A cached filter/sort index processes only new candidates until the user changes the filters or sort. The 100-row page keeps existing controls, patches changed selection/status, and inserts/removes/moves only rows whose membership/order changes. New results beyond a full page do not rebuild its controls or reset focus/scroll. Selection counts and bytes update incrementally. Selection persists across filters, and recovery includes all selected results. Original names, timestamps, and fragmentation are retained where filesystem records provide them. Carved files get generated names. No deletion dates are inferred.
+
+Recovery can run while scanning. The worker keeps the original read-only source handle and opens independent cursors for previews/exports. It checks source changes and validates exports, uses portable filenames, and never replaces an existing file. Raw-source size, sector geometry, and backing disks are queried on that handle, without requiring file metadata or resolving the source drive letter again. Raw-source exports require a destination on a verified different physical disk, including when two drive letters share a disk. Unknown destinations and incomplete disk-extent responses are rejected. Image exports can use another folder on the same drive without changing the image. Stop recovery finishes the current file; closing waits for that file before stopping. Scan cancellation keeps found results. Results remain in memory until another scan, worker loss, or exit. A worker restart clears old results and isolates old messages; rapid picture selection uses one decoder with only the latest preview queued.
+
+The F# bridge communicates over local JSON lines with an embedded Windows Rust worker built by `Prepare-Recovery.ps1`. No Reclaim installation, network service, or Rust runtime is needed by users. Sources are read-only, but Plumbyr still extracts its payload and writes its normal logs under LocalApplicationData. Run from another drive and avoid further writes to a drive containing lost data. Most carved formats have a 64 MiB limit; large ZIPs and filesystem-reconstructed files have separate limits. Recovery cannot restore overwritten or TRIM-erased data. See [the integration notes](plumbyr/Reclaim/README.md).
 
 ### Diagnostics, drivers, and Command Center
 
@@ -161,6 +173,15 @@ dotnet run --project tests/SpaceMapUiSmoke/SpaceMapUiSmoke.fsproj -c Release
 
 Scanner fixtures cover nested/deep totals, hidden/system files, empty locations, the top 40 files, links, cancellation, and read-only behavior. The headless UI check renders the page and verifies folder selection, drill-down, breadcrumbs, **Up**, and cancellation. Its preview is written to `.build/space-map-ui.png`.
 
+### Recovery
+
+```powershell
+cargo test --locked --manifest-path plumbyr/Reclaim/Cargo.toml --target-dir .build/recovery
+dotnet run --project tests/RecoverySmoke/RecoverySmoke.fsproj -c Release
+```
+
+The retained engine tests exercise allocation maps, fragmented/deleted files, corruption, read-only aligned reads, independent cursors, previews, no-clobber exports, incomplete extent lists, pinned source disks, and same-physical-disk rejection. The F# smoke check uses the actual embedded worker with synthetic images, including a formatted ext4 deletion fixture. It verifies byte-exact exports, source hashes, unsupported-map errors, native source/image selection, filtering, persistent selection, previews, cancellation, and closing during recovery. It also exports/previews during a running scan, forcibly terminates a private fixture worker, verifies pending requests fail, restarts and rescans, and checks that the UI clears stale results. A separate controlled protocol fixture streams 5,000 new candidates while checking visible row identity, selection, keyboard focus, scroll position, sorted insertion, and status updates. No host drive is scanned or written. Source discovery and destination classification only query host drive metadata. Rendered pages are saved as `.build/recovery-*.png` at two widths. Live raw-device access, USB removal, and real NTFS/FAT/exFAT recovery still require the disposable-drive validation described in [the integration notes](plumbyr/Reclaim/README.md).
+
 ### Browser bridge and portable executable
 
 After publishing:
@@ -190,8 +211,8 @@ The portable check copies only the EXE into a fresh fixture directory, clears PA
 Trigger a release by pushing a version tag or running **Release** from the Actions tab:
 
 ```powershell
-git tag v1.0.2
-git push origin v1.0.2
+git tag v1.0.3
+git push origin v1.0.3
 ```
 
 The installer definition is [installer/Plumbyr.iss](installer/Plumbyr.iss). JavaScript actions in the workflow declare Node 24; this action runtime is separate from the application runtime pinned in `scripts/node-runtime.json`. Build steps use Windows PowerShell where needed to avoid inheriting PowerShell 7 module paths into Windows PowerShell helpers.
@@ -203,5 +224,6 @@ Plumbyr is licensed under [GPL-3.0-or-later](LICENSE). Retained third-party noti
 - **Kudu:** only the TypeScript modules and browser definitions used for discovery are retained. Its MIT notice is in [plumbyr/Kudu/vendor/LICENSE](plumbyr/Kudu/vendor/LICENSE).
 - **Swept:** `OptimizeService.fs` adapts `cleaner_optimize.py` from [Swept](https://github.com/vladcodex/swept), MIT, copyright 2026 vladcodex. The notice is preserved at the top of [OptimizeService.fs](plumbyr/OptimizeService.fs).
 - **Roomy:** `SpaceScanner` and `SpaceMapView` adapt Roomy's `SpaceScanner` and `SpaceMapVM`, MIT, copyright 2026 krezio. The notice is preserved in [SpaceScanner.fs](plumbyr/SpaceScanner.fs) and embedded in the assembly.
+- **Reclaim:** the Windows recovery engine and project-owned fixtures are retained from Reclaim 0.2.4, MIT, copyright 2026 Reclaim contributors. [Provenance and changes](plumbyr/Reclaim/README.md); [license](plumbyr/Reclaim/LICENSE), also embedded in the payload. Sources and Recovered files are implemented in F#/Avalonia.
 - **Goodnight and QuickOff:** helper provenance and integration notes are in [plumbyr/Goodnight/README.md](plumbyr/Goodnight/README.md). QuickOff's MIT notice is in [QuickOff-LICENSE.txt](plumbyr/Goodnight/QuickOff-LICENSE.txt) and embedded with the helpers.
 - **Node:** the license and dependency notices are embedded from the checksum-verified official archive prepared by `Prepare-Node.ps1`.

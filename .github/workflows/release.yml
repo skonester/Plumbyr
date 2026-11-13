@@ -3,8 +3,8 @@ name: Release
 # Builds the portable single-file Plumbyr.exe and the Inno Setup installer,
 # smoke-tests the portable build, and publishes both to a GitHub release.
 #
-# Release by pushing a tag:   git tag v1.0.2 && git push origin v1.0.2
-# or run it manually from the Actions tab (enter the version, e.g. 1.0.2).
+# Release by pushing a tag:   git tag v1.0.3 && git push origin v1.0.3
+# or run it manually from the Actions tab (enter the version, e.g. 1.0.3).
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
       version:
         description: 'Release version (MAJOR.MINOR.PATCH)'
         required: true
-        default: '1.0.2'
+        default: '1.0.3'
 
 permissions:
   contents: write
@@ -48,6 +48,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Prepare Rust recovery engine
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          "RUSTUP_TOOLCHAIN=1.94.0" >> $env:GITHUB_ENV
+
+      - name: Verify recovery engine
+        run: cargo +1.94.0 test --locked --manifest-path plumbyr/Reclaim/Cargo.toml --target-dir .build/recovery
+
       - name: Cache NuGet packages
         uses: actions/cache@v5
         with:
@@ -70,6 +78,10 @@ jobs:
       - name: Verify sleep controls without power actions
         shell: powershell
         run: dotnet run --project tests/SleepSmoke/SleepSmoke.fsproj -c Release
+
+      - name: Verify recovery workflow with disk images
+        shell: powershell
+        run: dotnet run --project tests/RecoverySmoke/RecoverySmoke.fsproj -c Release
 
       # Runners are elevated, so the requireAdministrator manifest doesn't block this.
       - name: Smoke-test portable executable

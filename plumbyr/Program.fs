@@ -57,6 +57,8 @@ type NavKey =
     | NavCleaner of CleanCategory
     | NavBrowsers
     | NavSpaceMap
+    | NavRecoverySources
+    | NavRecoveredFiles
     | NavDrivers
     | NavOptimize
     | NavSleep
@@ -417,6 +419,10 @@ type MainWindow() as this =
         this.Closed.Add(fun _ -> (browserAnalysis :> IDisposable).Dispose())
         let spaceMapView = new SpaceMapView(writeToLog, this.StorageProvider)
         this.Closed.Add(fun _ -> (spaceMapView :> IDisposable).Dispose())
+        let mutable openRecoveredFiles: unit -> unit = fun () -> ()
+        let recoveryView = new RecoveryView(writeToLog, this.StorageProvider, fun () -> openRecoveredFiles())
+        this.Closing.Add(fun args -> if not (recoveryView.TryClose(fun () -> this.Close())) then args.Cancel <- true)
+        this.Closed.Add(fun _ -> (recoveryView :> IDisposable).Dispose())
 
         let driversView = new DriversView(writeToLog, this.StorageProvider)
         let optimizeView = new OptimizeView(writeToLog)
@@ -436,6 +442,8 @@ type MainWindow() as this =
         // the equivalent side effects the old button-click handlers used to run.
         let dashItem    = makeNavItem "Dashboard" DASH_SVG dashboardView NavDashboard
         let spaceMapItem = makeNavItem "Space map" APPS_SVG (spaceMapView :> Control) NavSpaceMap
+        let sourcesItem = makeNavItem "Sources" SYS_SVG recoveryView.SourcesPage NavRecoverySources
+        let recoveredItem = makeNavItem "Recovered files" HIST_SVG recoveryView.ResultsPage NavRecoveredFiles
         let termItem    = makeNavItem "Command Center" TERM_SVG terminalView NavTerminal
         let sysItem     = makeNavItem "System Cleanup" SYS_SVG cleanerView (NavCleaner SystemTemporary)
         let browserItem = makeNavItem "Browsers" BROWSER_SVG (browserAnalysis :> Control) NavBrowsers
@@ -450,6 +458,9 @@ type MainWindow() as this =
         treeMenu.PaneHeader <- header
         treeMenu.Items.Add(dashItem) |> ignore
         treeMenu.Items.Add(spaceMapItem) |> ignore
+        treeMenu.Items.Add(sourcesItem) |> ignore
+        treeMenu.Items.Add(recoveredItem) |> ignore
+        openRecoveredFiles <- fun () -> treeMenu.SelectedItem <- recoveredItem
         treeMenu.Items.Add(termItem) |> ignore
         treeMenu.Items.Add(sysItem) |> ignore
         treeMenu.Items.Add(browserItem) |> ignore
@@ -548,6 +559,13 @@ type MainWindow() as this =
                         currentCategory <- None
                         categoryTitle.Text <- "SPACE MAP"
                         writeToLog "Switching to Space Map..."
+                    | NavRecoverySources ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "SOURCES"
+                        recoveryView.RefreshIfEmpty()
+                    | NavRecoveredFiles ->
+                        currentCategory <- None
+                        categoryTitle.Text <- "RECOVERED FILES"
                     | NavDrivers ->
                         currentCategory <- None
                         categoryTitle.Text <- "DRIVERS"

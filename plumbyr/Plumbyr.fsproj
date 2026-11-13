@@ -6,7 +6,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <RootNamespace>WindowsCleaner</RootNamespace>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <Product>Plumbyr</Product>
     <AssemblyTitle>Plumbyr</AssemblyTitle>
     <Description>Plumbing Linked Universal Maintenance &amp; Binary Yield Reclaimer</Description>
@@ -29,6 +29,8 @@
     <Compile Include="BrowserAnalysisView.fs" />
     <Compile Include="SpaceScanner.fs" />
     <Compile Include="SpaceMapView.fs" />
+    <Compile Include="RecoveryService.fs" />
+    <Compile Include="RecoveryView.fs" />
     <Compile Include="DriverService.fs" />
     <Compile Include="DriversView.fs" />
     <Compile Include="OptimizeService.fs" />
@@ -42,6 +44,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Assets\icon.png" LogicalName="Plumbyr.Payload/Assets/icon.png" />
     <EmbeddedResource Include="SpaceScanner.fs" LogicalName="Plumbyr.Notices/Roomy-SpaceScanner.fs" />
+    <EmbeddedResource Include="..\.build\recovery\x86_64-pc-windows-msvc\release\plumbyr-recovery.exe" LogicalName="Plumbyr.Payload/Reclaim/plumbyr-recovery.exe" />
+    <EmbeddedResource Include="Reclaim\LICENSE" LogicalName="Plumbyr.Payload/Reclaim/LICENSE" />
     <EmbeddedResource Include="Goodnight\*.ps1;Goodnight\QuickOff-LICENSE.txt" LogicalName="Plumbyr.Payload/Goodnight/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\win32rules\*.json" LogicalName="Plumbyr.Payload/win32rules/%(Filename)%(Extension)" />
     <EmbeddedResource Include="Kudu\worker.mjs" LogicalName="Plumbyr.Payload/Kudu/worker.mjs" />
@@ -53,6 +57,10 @@
   <Target Name="PrepareBundledNode" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(RuntimeIdentifier)' != '' And '$(RuntimeIdentifier)' != 'win-x64'" Text="Bundled Node currently supports win-x64. Use the SingleFile publish profile." />
     <Exec Command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\scripts\Prepare-Node.ps1&quot;" />
+  </Target>
+
+  <Target Name="PrepareRecoveryWorker" BeforeTargets="PrepareForBuild">
+    <Exec Command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\scripts\Prepare-Recovery.ps1&quot;" />
   </Target>
 
   <ItemGroup>
