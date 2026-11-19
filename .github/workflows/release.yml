@@ -3,8 +3,8 @@ name: Release
 # Builds the portable single-file Plumbyr.exe and the Inno Setup installer,
 # smoke-tests the portable build, and publishes both to a GitHub release.
 #
-# Release by pushing a tag:   git tag v1.0.3 && git push origin v1.0.3
-# or run it manually from the Actions tab (enter the version, e.g. 1.0.3).
+# Release by pushing a tag:   git tag v1.0.4 && git push origin v1.0.4
+# or run it manually from the Actions tab (enter the version, e.g. 1.0.4).
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
       version:
         description: 'Release version (MAJOR.MINOR.PATCH)'
         required: true
-        default: '1.0.3'
+        default: '1.0.4'
 
 permissions:
   contents: write
@@ -78,6 +78,10 @@ jobs:
       - name: Verify sleep controls without power actions
         shell: powershell
         run: dotnet run --project tests/SleepSmoke/SleepSmoke.fsproj -c Release
+
+      - name: Verify driver workflow without system changes
+        shell: powershell
+        run: dotnet run --project tests/DriverSmoke/DriverSmoke.fsproj -c Release
 
       - name: Verify recovery workflow with disk images
         shell: powershell

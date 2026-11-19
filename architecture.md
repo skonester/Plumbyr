@@ -41,7 +41,7 @@ The desktop shell uses Avalonia with Synthora controls. The project targets `net
 | `SystemInfo` | Read Windows and hardware diagnostics through WMI and DXGI. |
 | `SpaceScanner`, `SpaceMapView` | Build and display a read-only folder-size tree and bounded top-40 file list. |
 | `RecoveryService`, `RecoveryView`, `Reclaim/` | Native F# source selection and recovered-file pages, with a bundled Reclaim recovery worker. |
-| `DriverService`, `DriversView` | Inspect drivers, use Windows Update, export backups, install local INF packages, and request restore points. |
+| `DriverScanner`, `DriverService`, `DriversView` | Inspect drivers, use Windows Update, export backups, install local INF packages, and request restore points. |
 | `OptimizeService`, `OptimizeView` | Present and apply selected Windows settings and debloat actions. |
 | `SleepController`, `SleepPlatform`, `SleepView` | Manage monitoring, countdowns, Windows power integration, diagnostic tools, and sleep settings. |
 | `ActivityLog`, `CleaningHistory` | Record activity and cleanup session statistics. |
@@ -117,7 +117,7 @@ The F# bridge communicates over local JSON lines with an embedded Windows Rust w
 
 `SystemInfo` provides Windows and hardware information through WMI and DXGI. Command Center displays activity, runs diagnostics, accepts PowerShell/CMD commands, and exports terminal logs.
 
-Driver tools scan installed signed drivers, export a CSV inventory, check/install driver updates through Windows Update, back up third-party drivers with DISM, and install local INF packages with `pnputil`. Driver and optimization pages can request a system restore point.
+Driver tools scan installed drivers, export a CSV inventory, check driver updates through Windows Update, back up third-party drivers with DISM, and install local INF packages with `pnputil`. Select offered updates and use **Install selected updates** to download/install those exact IDs and revisions through WUA. Each result includes success, completed-with-errors, failure, unavailable, not-attempted, or unconfirmed status, with HRESULTs and restart reporting. The default restore-point option requires a verified new restore point; it can be turned off before confirming installation. Stop and Close wait for the current Windows operation and preserve completed results. No automatic restart is requested. Driver and optimization pages can also request a system restore point separately.
 
 ### Windows optimization
 
@@ -211,15 +211,17 @@ The portable check copies only the EXE into a fresh fixture directory, clears PA
 Trigger a release by pushing a version tag or running **Release** from the Actions tab:
 
 ```powershell
-git tag v1.0.3
-git push origin v1.0.3
+git tag v1.0.4
+git push origin v1.0.4
 ```
 
 The installer definition is [installer/Plumbyr.iss](installer/Plumbyr.iss). JavaScript actions in the workflow declare Node 24; this action runtime is separate from the application runtime pinned in `scripts/node-runtime.json`. Build steps use Windows PowerShell where needed to avoid inheriting PowerShell 7 module paths into Windows PowerShell helpers.
 
 ## Third-party code and licenses
 
-Plumbyr is licensed under [GPL-3.0-or-later](LICENSE). Retained third-party notices remain with their code:
+Plumbyr distributions are licensed under [GPLv3](LICENSE), with original Plumbyr code retaining its GPL-3.0-or-later grant. Retained third-party notices remain with their code:
+
+- **StellarHub:** driver inventory, Windows Update search, and selected-update installation are adapted from StellarHub 1.0.0 under GPL-3.0-only. [Provenance and changes](docs/stellarhub-driver-scanning.md); [full GPL text](COPYING). Both helpers and the license are embedded in the portable app. `DriverScanner` isolates read-only scans, reports failures/partial results explicitly, bounds worker output and time, and caches only complete validated results. `DriverInstaller` preserves per-update outcomes, uses cooperative stopping, and records each attempt under `driver-installs/`. Driver task cancellation retains the busy slot until the worker stops. Run `dotnet run --project tests/DriverSmoke/DriverSmoke.fsproj -c Release` for scanner, selected installation, cache, process-lifetime, and headless UI checks.
 
 - **Kudu:** only the TypeScript modules and browser definitions used for discovery are retained. Its MIT notice is in [plumbyr/Kudu/vendor/LICENSE](plumbyr/Kudu/vendor/LICENSE).
 - **Swept:** `OptimizeService.fs` adapts `cleaner_optimize.py` from [Swept](https://github.com/vladcodex/swept), MIT, copyright 2026 vladcodex. The notice is preserved at the top of [OptimizeService.fs](plumbyr/OptimizeService.fs).

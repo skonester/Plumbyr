@@ -2,55 +2,18 @@ namespace WindowsCleaner
 
 open System
 open System.IO
-open System.Management
 open System.Diagnostics
 open System.Threading
 
-// -----------------------------------------------------------------------
-// Driver record types
-// -----------------------------------------------------------------------
-
-type DriverItem = {
-    DeviceName   : string
-    DeviceClass  : string
-    Manufacturer : string
-    DriverVersion: string
-    DriverDate   : string
-    InfName      : string
-}
-
-type DriverUpdateInfo = {
-    Title    : string
-    Provider : string
-    SizeMB   : float
-}
-
-// -----------------------------------------------------------------------
-// DriverService module — F# port of DriverUpdate PowerShell scripts
-// -----------------------------------------------------------------------
+// Driver mutations remain here; read-only inventory/update scans use DriverScanner.
 module DriverService =
 
-    // ------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------
-
-    let private wmiString (obj: ManagementBaseObject) key =
-        try
-            let v = obj.[key]
-            if isNull v then "" else v.ToString().Trim()
-        with _ -> ""
-
-    let private wmiDate (obj: ManagementBaseObject) key =
-        try
-            let v = obj.[key]
-            if isNull v then ""
-            else
-                // WMI DMTF datetime: "20250101000000.000000+000"
-                let s = v.ToString()
-                if s.Length >= 8 then
-                    sprintf "%s-%s-%s" s.[0..3] s.[4..5] s.[6..7]
-                else s
-        with _ -> ""
+    let private cachePath () = Path.Combine(AppFiles.dataDirectory(), "drivers-last-scan.json")
+    let private runScan mode ct = DriverScanner.worker (AppFiles.get "Drivers/DriverScan.ps1") mode ct
+    let scanDrivers ct = DriverScanner.scanInventoryWith runScan ct
+    let checkDriverUpdates ct = DriverScanner.scanUpdatesWith runScan (cachePath()) ct
+    let lastDriverScan () = DriverScanner.loadLastScan (cachePath())
+    let scanner = { Inventory = scanDrivers; Updates = checkDriverUpdates; LastScan = lastDriverScan }
 
     let private runProcess (exe: string) (args: string) (onLog: string -> unit) =
         try
@@ -71,30 +34,6 @@ module DriverService =
             -1
 
     // ------------------------------------------------------------------
-    // 1) Scan installed signed drivers via Win32_PnPSignedDriver
-    // ------------------------------------------------------------------
-
-    let scanDrivers () : DriverItem list =
-        try
-            use searcher = new ManagementObjectSearcher(
-                "SELECT DeviceName, Manufacturer, DriverVersion, InfName, DeviceClass, DriverDate FROM Win32_PnPSignedDriver")
-            use results = searcher.Get()
-            [ for mbo in results do
-                let item = {
-                    DeviceName    = wmiString mbo "DeviceName"
-                    DeviceClass   = wmiString mbo "DeviceClass"
-                    Manufacturer  = wmiString mbo "Manufacturer"
-                    DriverVersion = wmiString mbo "DriverVersion"
-                    DriverDate    = wmiDate   mbo "DriverDate"
-                    InfName       = wmiString mbo "InfName"
-                }
-                mbo.Dispose()
-                yield item ]
-            |> List.sortBy (fun d -> d.DeviceName)
-        with _ ->
-            []
-
-    // ------------------------------------------------------------------
     // 2) Export driver list to CSV
     // ------------------------------------------------------------------
 
@@ -107,85 +46,16 @@ module DriverService =
                 (esc d.DeviceName) (esc d.DeviceClass) (esc d.Manufacturer)
                 (esc d.DriverVersion) (esc d.DriverDate) (esc d.InfName))
 
-    // ------------------------------------------------------------------
-    // 3) Check driver updates via Windows Update COM object
-    //    (mirrors DriveUpdateV3.ps1 CheckDriverUpdates task)
-    // ------------------------------------------------------------------
+    // StellarHub's selected-update flow, with exact revisions and confirmed outcomes.
+    let installSelectedDriverUpdates updates restorePoint ct onEvent =
+        DriverInstaller.validateSelection updates
+        // Installation may change the machine even if its worker later fails.
+        // Never retain a pre-install scan as the next launch's available updates.
+        let cache = cachePath()
+        if File.Exists cache then File.Delete cache
+        DriverInstaller.run (AppFiles.get "Drivers/DriverInstall.ps1") (AppFiles.dataDirectory()) updates restorePoint ct onEvent
 
-    let checkDriverUpdates (ct: CancellationToken) (onLog: string -> unit) : DriverUpdateInfo list =
-        onLog "Checking for available driver updates via Windows Update..."
-        try
-            let sessionType  = Type.GetTypeFromProgID("Microsoft.Update.Session")
-            if isNull sessionType then
-                onLog "[ERROR] Windows Update COM object not available on this system."
-                []
-            else
-            let session   = Activator.CreateInstance(sessionType)
-            let searcher  = sessionType.InvokeMember("CreateUpdateSearcher", Reflection.BindingFlags.InvokeMethod, null, session, [||])
-            let st        = searcher.GetType()
-            onLog "Searching Windows Update catalog (this may take a moment)..."
-            let result    = st.InvokeMember("Search", Reflection.BindingFlags.InvokeMethod, null, searcher, [| "IsInstalled=0 and Type='Driver'" |])
-            let rt        = result.GetType()
-            let coll      = rt.InvokeMember("Updates", Reflection.BindingFlags.GetProperty, null, result, [||])
-            let ct2       = coll.GetType()
-            let count     = ct2.InvokeMember("Count", Reflection.BindingFlags.GetProperty, null, coll, [||]) :?> int
-            if count = 0 then
-                onLog "No driver updates available. Your drivers are up to date!"
-                []
-            else
-                onLog (sprintf "Found %d driver update(s) available:" count)
-                [ for i in 0 .. count - 1 do
-                    let u   = ct2.InvokeMember("Item", Reflection.BindingFlags.InvokeMethod, null, coll, [| i |])
-                    let ut  = u.GetType()
-                    let getString n = try ut.InvokeMember(n, Reflection.BindingFlags.GetProperty, null, u, [||]) :?> string with _ -> ""
-                    let getFloat  n = try Convert.ToDouble(ut.InvokeMember(n, Reflection.BindingFlags.GetProperty, null, u, [||])) with _ -> 0.0
-                    let title    = getString "Title"
-                    let provider = getString "DriverProvider"
-                    let size     = getFloat  "MaxDownloadSize" / 1_048_576.0
-                    onLog (sprintf "  %d. %s" (i+1) title)
-                    if provider <> "" then onLog (sprintf "     Provider : %s" provider)
-                    if size > 0.0    then onLog (sprintf "     Size     : %.2f MB" size)
-                    yield { Title = title; Provider = provider; SizeMB = size } ]
-        with ex ->
-            onLog (sprintf "[ERROR] Failed to check driver updates: %s" ex.Message)
-            onLog "Make sure the Windows Update service is running and you are an administrator."
-            []
-
-    // ------------------------------------------------------------------
-    // 4) Run the full Windows Update pipeline (scan -> download -> install)
-    //    (mirrors DriveUpdateV3.ps1 WindowsUpdate task)
-    // ------------------------------------------------------------------
-
-    let runWindowsUpdate (ct: CancellationToken) (onLog: string -> unit) (onProgress: int -> unit) =
-        onLog "Starting Windows Update pipeline..."
-        try
-            onLog "[1/4] Triggering update detection (wuauclt /detectnow)..."
-            runProcess "wuauclt.exe" "/detectnow" onLog |> ignore
-            onProgress 10
-            if not ct.IsCancellationRequested then
-                Thread.Sleep(3000)
-                onLog "[2/4] Scanning for updates (usoclient StartScan)..."
-                let r2 = runProcess "usoclient.exe" "StartScan" onLog
-                if r2 <> 0 then onLog "  (Scan returned non-zero; system may already be scanning)"
-                onProgress 30
-            if not ct.IsCancellationRequested then
-                Thread.Sleep(3000)
-                onLog "[3/4] Downloading updates (usoclient StartDownload)..."
-                let r3 = runProcess "usoclient.exe" "StartDownload" onLog
-                if r3 <> 0 then onLog "  (No updates to download, or system is up to date)"
-                onProgress 65
-            if not ct.IsCancellationRequested then
-                Thread.Sleep(3000)
-                onLog "[4/4] Installing updates (usoclient StartInstall)..."
-                let r4 = runProcess "usoclient.exe" "StartInstall" onLog
-                if r4 <> 0 then onLog "  (No updates to install, or system is up to date)"
-                onProgress 100
-                onLog ""
-                onLog "Windows Update pipeline complete. Check Settings -> Windows Update for status."
-            else
-                onLog "[CANCELLED] Task was cancelled."
-        with ex ->
-            onLog (sprintf "[ERROR] Windows Update pipeline failed: %s" ex.Message)
+    let installer: DriverInstallBackend = installSelectedDriverUpdates
 
     // ------------------------------------------------------------------
     // 5) Backup 3rd-party drivers via DISM

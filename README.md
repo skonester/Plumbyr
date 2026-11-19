@@ -9,7 +9,7 @@ Reclaim disk space, find storage hogs, and troubleshoot your PC from one app. Pr
 [![Latest release](https://img.shields.io/github/v/release/skonester/Plumbyr?label=release)](https://github.com/skonester/Plumbyr/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/skonester/Plumbyr/total)](https://github.com/skonester/Plumbyr/releases)
 [![Release build](https://github.com/skonester/Plumbyr/actions/workflows/release.yml/badge.svg)](https://github.com/skonester/Plumbyr/actions/workflows/release.yml)
-[![License: GPLv3+](https://img.shields.io/badge/license-GPLv3%2B-blue)](LICENSE)
+[![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 [![Windows 10 and 11 x64](https://img.shields.io/badge/Windows-10%20%26%2011%20x64-0078D4)](#get-started)
 
 **[Download the latest release](https://github.com/skonester/Plumbyr/releases/latest)** · [Report a bug](https://github.com/skonester/Plumbyr/issues) · [Technical guide](architecture.md)
@@ -42,4 +42,4 @@ Found a problem or have an idea? [Open an issue](https://github.com/skonester/Pl
 
 For build instructions, feature details, tests, release packaging, and third-party credits, see the [architecture and contributor guide](architecture.md).
 
-P.L.U.M.B.Y.R stands for **Plumbing Linked Universal Maintenance & Binary Yield Reclaimer**. Licensed under [GPL-3.0-or-later](LICENSE).
+P.L.U.M.B.Y.R stands for **Plumbing Linked Universal Maintenance & Binary Yield Reclaimer**. Distributed under [GPLv3](LICENSE); original Plumbyr code is GPL-3.0-or-later.

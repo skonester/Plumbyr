@@ -88,6 +88,8 @@ type MainWindow() as this =
     let SYS_SVG = "M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"
     let BROWSER_SVG = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
     let APPS_SVG = "M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"
+    let SPACE_MAP_SVG = "M2 2h11v20H2V2zM15 2h7v8h-7V2zM15 12h7v10h-7V12z"
+    let RECOVERED_FILES_SVG = "M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm0 2.8L17.2 8H14V4.8zM7 14l4-4v3h2a4 4 0 0 1 4 4v2h-2v-2a2 2 0 0 0-2-2h-2v3l-4-4z"
     let PRIVACY_SVG = "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
     let GAME_SVG ="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"
     let DRIVER_SVG = "M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"
@@ -425,6 +427,8 @@ type MainWindow() as this =
         this.Closed.Add(fun _ -> (recoveryView :> IDisposable).Dispose())
 
         let driversView = new DriversView(writeToLog, this.StorageProvider)
+        this.Closing.Add(fun args -> if not (driversView.TryClose(fun () -> this.Close())) then args.Cancel <- true)
+        this.Closed.Add(fun _ -> (driversView :> IDisposable).Dispose())
         let optimizeView = new OptimizeView(writeToLog)
         let sleepPlatform = SleepPlatform.WindowsSleepPlatform(writeToLog) :> ISleepPlatform
         let sleepController = new SleepController(sleepPlatform, writeToLog)
@@ -441,9 +445,9 @@ type MainWindow() as this =
         // Selecting an item both shows its Content and (via SelectionChanged below) triggers
         // the equivalent side effects the old button-click handlers used to run.
         let dashItem    = makeNavItem "Dashboard" DASH_SVG dashboardView NavDashboard
-        let spaceMapItem = makeNavItem "Space map" APPS_SVG (spaceMapView :> Control) NavSpaceMap
+        let spaceMapItem = makeNavItem "Space map" SPACE_MAP_SVG (spaceMapView :> Control) NavSpaceMap
         let sourcesItem = makeNavItem "Sources" SYS_SVG recoveryView.SourcesPage NavRecoverySources
-        let recoveredItem = makeNavItem "Recovered files" HIST_SVG recoveryView.ResultsPage NavRecoveredFiles
+        let recoveredItem = makeNavItem "Recovered files" RECOVERED_FILES_SVG recoveryView.ResultsPage NavRecoveredFiles
         let termItem    = makeNavItem "Command Center" TERM_SVG terminalView NavTerminal
         let sysItem     = makeNavItem "System Cleanup" SYS_SVG cleanerView (NavCleaner SystemTemporary)
         let browserItem = makeNavItem "Browsers" BROWSER_SVG (browserAnalysis :> Control) NavBrowsers

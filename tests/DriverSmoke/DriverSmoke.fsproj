@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+  </PropertyGroup>
+  <!-- Compile the production driver files without building unrelated bundled workers. -->
+  <ItemGroup>
+    <Compile Include="../../plumbyr/Types.fs" Link="Types.fs" />
+    <Compile Include="../../plumbyr/AppFiles.fs" Link="AppFiles.fs" />
+    <Compile Include="../../plumbyr/DriverScanner.fs" Link="DriverScanner.fs" />
+    <Compile Include="../../plumbyr/DriverInstaller.fs" Link="DriverInstaller.fs" />
+    <Compile Include="../../plumbyr/DriverService.fs" Link="DriverService.fs" />
+    <Compile Include="../../plumbyr/DriversView.fs" Link="DriversView.fs" />
+    <Compile Include="InstallerChecks.fs" />
+    <Compile Include="Program.fs" />
+    <EmbeddedResource Include="../../plumbyr/DriverScan.ps1" LogicalName="Plumbyr.Payload/Drivers/DriverScan.ps1" />
+    <EmbeddedResource Include="../../plumbyr/DriverInstall.ps1" LogicalName="Plumbyr.Payload/Drivers/DriverInstall.ps1" />
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="FSharp.Json" Version="0.4.1" />
+    <PackageReference Include="Synthora" Version="2.5.2" />
+  </ItemGroup>
+</Project>

@@ -6,7 +6,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <RootNamespace>WindowsCleaner</RootNamespace>
-    <Version>1.0.3</Version>
+    <Version>1.0.4</Version>
     <Product>Plumbyr</Product>
     <AssemblyTitle>Plumbyr</AssemblyTitle>
     <Description>Plumbing Linked Universal Maintenance &amp; Binary Yield Reclaimer</Description>
@@ -31,6 +31,8 @@
     <Compile Include="SpaceMapView.fs" />
     <Compile Include="RecoveryService.fs" />
     <Compile Include="RecoveryView.fs" />
+    <Compile Include="DriverScanner.fs" />
+    <Compile Include="DriverInstaller.fs" />
     <Compile Include="DriverService.fs" />
     <Compile Include="DriversView.fs" />
     <Compile Include="OptimizeService.fs" />
@@ -43,6 +45,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\icon.png" LogicalName="Plumbyr.Payload/Assets/icon.png" />
+    <EmbeddedResource Include="DriverScan.ps1" LogicalName="Plumbyr.Payload/Drivers/DriverScan.ps1" />
+    <EmbeddedResource Include="DriverInstall.ps1" LogicalName="Plumbyr.Payload/Drivers/DriverInstall.ps1" />
+    <EmbeddedResource Include="..\COPYING" LogicalName="Plumbyr.Payload/Drivers/COPYING" />
     <EmbeddedResource Include="SpaceScanner.fs" LogicalName="Plumbyr.Notices/Roomy-SpaceScanner.fs" />
     <EmbeddedResource Include="..\.build\recovery\x86_64-pc-windows-msvc\release\plumbyr-recovery.exe" LogicalName="Plumbyr.Payload/Reclaim/plumbyr-recovery.exe" />
     <EmbeddedResource Include="Reclaim\LICENSE" LogicalName="Plumbyr.Payload/Reclaim/LICENSE" />

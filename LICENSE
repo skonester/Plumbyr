@@ -15,3 +15,9 @@
 
  You should have received a copy of the GNU General Public License
  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ The complete GNU GPL version 3 text is provided in COPYING.
+ DriverScan.ps1 and DriverInstall.ps1 adapt StellarHub code under GPL-3.0-only; see
+ docs/stellarhub-driver-scanning.md. Combined distributions containing
+ that component are licensed under GPL version 3. Original Plumbyr code
+ retains the GPL-3.0-or-later grant above.
